@@ -8,8 +8,6 @@
 
 使用 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) 在 Docker 容器中运行 [Whisper](https://github.com/openai/whisper) 语音转文字服务器。提供 OpenAI 兼容的音频转录和翻译 API。基于 Debian (python:3.12-slim)，简单、私密、可自托管。
 
-> 📘 **新书：**[The Self-Hosted AI Builder’s Guide](https://books2read.com/aiguide?store=amazon)——了解如何将此服务部署为完整且默认安全的私有 AI 技术栈的一部分。
-
 **功能特性：**
 
 - OpenAI 兼容的 `POST /v1/audio/transcriptions` 和 `POST /v1/audio/translations` 接口 — 任何调用 OpenAI Whisper API 的应用只需修改一行配置即可切换
@@ -26,27 +24,12 @@
 - 通过 Docker 数据卷持久化模型缓存
 - 多架构支持：`linux/amd64`、`linux/arm64`
 
+> 📘 [The Self-Hosted AI Builder’s Guide](https://books2read.com/aiguide?store=amazon) 是一本关于构建、保护和运维自己的私有 AI 技术栈的实用指南。
+
 **另提供：**
 
 - 在线试用：[在 Colab 中打开](https://vpnsetup.net/whisper-notebook)——无需 Docker 或安装
 - 相关 AI 服务：[WhisperLive](https://github.com/hwdsl2/docker-whisper-live/blob/main/README-zh.md)、[Kokoro](https://github.com/hwdsl2/docker-kokoro/blob/main/README-zh.md)、[Embeddings](https://github.com/hwdsl2/docker-embeddings/blob/main/README-zh.md)、[LiteLLM](https://github.com/hwdsl2/docker-litellm/blob/main/README-zh.md)、[Ollama](https://github.com/hwdsl2/docker-ollama/blob/main/README-zh.md)、[Docling](https://github.com/hwdsl2/docker-docling/blob/main/README-zh.md)、[MCP Gateway](https://github.com/hwdsl2/docker-mcp-gateway/blob/main/README-zh.md)
-
-## 社区
-
-- 📬 [订阅项目更新](https://selfhostedstack.beehiiv.com/subscribe?utm_campaign=ai-zh)（每月 1–2 封邮件）——获取免费的 AI 和 VPN 部署指南（PDF，英文）
-- 💬 加入 [r/selfhostedstack](https://www.reddit.com/r/selfhostedstack/) 社区，参与讨论和项目展示
-- ⭐ 如果你觉得本项目有用，请为仓库加星——这有助于让更多人发现它。
-
-<details>
-<summary>自托管 VPN 和网络项目</summary>
-
-- [Setup IPsec VPN](https://github.com/hwdsl2/setup-ipsec-vpn/blob/master/README-zh.md)
-- [Docker 上的 IPsec VPN](https://github.com/hwdsl2/docker-ipsec-vpn-server/blob/master/README-zh.md)
-- [WireGuard](https://github.com/hwdsl2/docker-wireguard/blob/main/README-zh.md)
-- [OpenVPN](https://github.com/hwdsl2/docker-openvpn/blob/main/README-zh.md)
-- [Headscale](https://github.com/hwdsl2/docker-headscale/blob/main/README-zh.md)
-
-</details>
 
 ## Whisper 与 WhisperLive 的选择
 
@@ -92,7 +75,8 @@ docker run \
 
 **重要：** 此镜像运行默认 `base` 模型需要至少 700 MB 可用内存。内存为 512 MB 或更少的系统不受支持。
 
-**注：** 如需面向互联网的部署，**强烈建议**使用[反向代理](#使用反向代理)来添加 HTTPS。此时，还应将上述 `docker run` 命令中的 `-p 9000:9000` 替换为 `-p 127.0.0.1:9000:9000`，以防止从外部直接访问未加密端口。
+> [!NOTE]
+> 如需面向互联网的部署，请使用[反向代理](#使用反向代理)来添加 HTTPS。同时，请将上述 `docker run` 命令中的 `-p 9000:9000` 替换为 `-p 127.0.0.1:9000:9000`，以防止从外部直接访问未加密端口。
 
 首次启动时，Whisper `base` 模型（约 145 MB）将自动下载并缓存。查看日志确认服务器已就绪：
 
@@ -125,6 +109,23 @@ curl http://您的服务器IP:9000/v1/audio/transcriptions \
 ```
 
 另外，你也可以在不使用 Docker 的情况下[安装 Whisper](https://github.com/hwdsl2/whisper-install/blob/main/README-zh.md)。如需了解更多关于此镜像的使用方法，请阅读以下各节。
+
+## 社区
+
+- 📬 [获取项目更新和免费部署指南](https://selfhostedstack.beehiiv.com/subscribe?utm_campaign=ai-zh)（每月 1–2 封邮件；指南为英文 PDF）
+- 💬 加入 [r/selfhostedstack](https://www.reddit.com/r/selfhostedstack/) 社区，参与讨论和项目展示
+- ⭐ 如果你觉得本项目有用，请为仓库加星——这有助于让更多人发现它。
+
+<details>
+<summary>自托管 VPN 和网络项目</summary>
+
+- [Setup IPsec VPN](https://github.com/hwdsl2/setup-ipsec-vpn/blob/master/README-zh.md)
+- [Docker 上的 IPsec VPN](https://github.com/hwdsl2/docker-ipsec-vpn-server/blob/master/README-zh.md)
+- [WireGuard](https://github.com/hwdsl2/docker-wireguard/blob/main/README-zh.md)
+- [OpenVPN](https://github.com/hwdsl2/docker-openvpn/blob/main/README-zh.md)
+- [Headscale](https://github.com/hwdsl2/docker-headscale/blob/main/README-zh.md)
+
+</details>
 
 ## 系统要求
 
@@ -252,7 +253,8 @@ volumes:
     name: whisper-data
 ```
 
-**注：** 如需面向公网部署，强烈建议使用[反向代理](#使用反向代理)启用 HTTPS。此时请将 `docker-compose.yml` 中的 `"9000:9000/tcp"` 改为 `"127.0.0.1:9000:9000/tcp"`，以防止未加密端口被直接访问。
+> [!NOTE]
+> 如需面向公网部署，请使用[反向代理](#使用反向代理)启用 HTTPS。同时，请将 `docker-compose.yml` 中的 `"9000:9000/tcp"` 改为 `"127.0.0.1:9000:9000/tcp"`，以防止未加密端口被直接访问。
 
 <details>
 <summary><strong>使用 docker-compose 部署 GPU（NVIDIA CUDA）</strong></summary>
@@ -711,7 +713,10 @@ docker exec whisper whisper_manage --downloaddiarize
 ```
 
 **注意事项：**
-- 说话人分离需要完整音频分析，**不支持流式模式**（`stream=true`）。两者同时启用时，说话人分离会被静默跳过。
+
+> [!IMPORTANT]
+> 说话人分离需要完整音频分析，**不支持流式模式**（`stream=true`）。两者同时启用时，说话人分离会被静默跳过。
+
 - 如果已知确切说话人数量，设置 `WHISPER_DIARIZE_NUM_SPEAKERS` 可提高准确性。
 - 说话人分离在转录完成后运行，会增加与音频时长成正比的少量处理时间。
 

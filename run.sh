@@ -29,6 +29,20 @@ check_ip() {
   printf '%s' "$1" | tr -d '\n' | grep -Eq "$IP_REGEX"
 }
 
+fetch_public_ip() {
+  local ip_addr ip_url
+  for ip_url in https://ipv4.icanhazip.com https://api.ipify.org; do
+    ip_addr=$(curl -q -4fsS --max-time 10 "$ip_url" 2>/dev/null) || continue
+    ip_addr=${ip_addr%$'\r'}
+    [[ "$ip_addr" != *$'\n'* && "$ip_addr" != *$'\r'* ]] || continue
+    if check_ip "$ip_addr"; then
+      printf '%s' "$ip_addr"
+      return 0
+    fi
+  done
+  return 1
+}
+
 # Source bind-mounted env file if present (takes precedence over --env-file)
 if [ -f /whisper.env ]; then
   # shellcheck disable=SC1091
@@ -282,8 +296,7 @@ else
 fi
 
 # Determine server address for display
-public_ip=$(curl -s --max-time 10 http://ipv4.icanhazip.com 2>/dev/null || true)
-check_ip "$public_ip" || public_ip=$(curl -s --max-time 10 http://ip1.dynupdate.no-ip.com 2>/dev/null || true)
+public_ip=$(fetch_public_ip) || public_ip=""
 if check_ip "$public_ip"; then
   server_addr="$public_ip"
 else

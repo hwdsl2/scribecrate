@@ -8,8 +8,6 @@
 
 使用 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) 在 Docker 容器中執行 [Whisper](https://github.com/openai/whisper) 語音轉文字伺服器。提供 OpenAI 相容的音訊轉錄和翻譯 API。基於 Debian (python:3.12-slim)，簡單、私密、可自架。
 
-> 📘 **新書：**[The Self-Hosted AI Builder’s Guide](https://books2read.com/aiguide?store=amazon)——瞭解如何將此服務部署為完整且預設即安全的私有 AI 技術棧的一部分。
-
 **功能特性：**
 
 - OpenAI 相容的 `POST /v1/audio/transcriptions` 和 `POST /v1/audio/translations` 端點 — 任何呼叫 OpenAI Whisper API 的應用程式只需修改一行設定即可切換
@@ -26,27 +24,12 @@
 - 透過 Docker 資料卷持久化模型快取
 - 多架構支援：`linux/amd64`、`linux/arm64`
 
+> 📘 [The Self-Hosted AI Builder’s Guide](https://books2read.com/aiguide?store=amazon) 是一本關於建置、保護和維運自己的私有 AI 技術堆疊的實用指南。
+
 **另提供：**
 
 - 線上試用：[在 Colab 中開啟](https://vpnsetup.net/whisper-notebook)——無需 Docker 或安裝
 - 相關 AI 服務：[WhisperLive](https://github.com/hwdsl2/docker-whisper-live/blob/main/README-zh-Hant.md)、[Kokoro](https://github.com/hwdsl2/docker-kokoro/blob/main/README-zh-Hant.md)、[Embeddings](https://github.com/hwdsl2/docker-embeddings/blob/main/README-zh-Hant.md)、[LiteLLM](https://github.com/hwdsl2/docker-litellm/blob/main/README-zh-Hant.md)、[Ollama](https://github.com/hwdsl2/docker-ollama/blob/main/README-zh-Hant.md)、[Docling](https://github.com/hwdsl2/docker-docling/blob/main/README-zh-Hant.md)、[MCP Gateway](https://github.com/hwdsl2/docker-mcp-gateway/blob/main/README-zh-Hant.md)
-
-## 社群
-
-- 📬 [訂閱專案更新](https://selfhostedstack.beehiiv.com/subscribe?utm_campaign=ai-zh-hant)（每月 1–2 封郵件）——獲取免費的 AI 和 VPN 部署指南（PDF，英文）
-- 💬 加入 [r/selfhostedstack](https://www.reddit.com/r/selfhostedstack/) 社群，參與討論與專案展示
-- ⭐ 如果你覺得本專案有用，請為儲存庫加星——這能幫助更多人發現它。
-
-<details>
-<summary>自託管 VPN 與網路專案</summary>
-
-- [Setup IPsec VPN](https://github.com/hwdsl2/setup-ipsec-vpn/blob/master/README-zh-Hant.md)
-- [Docker 上的 IPsec VPN](https://github.com/hwdsl2/docker-ipsec-vpn-server/blob/master/README-zh-Hant.md)
-- [WireGuard](https://github.com/hwdsl2/docker-wireguard/blob/main/README-zh-Hant.md)
-- [OpenVPN](https://github.com/hwdsl2/docker-openvpn/blob/main/README-zh-Hant.md)
-- [Headscale](https://github.com/hwdsl2/docker-headscale/blob/main/README-zh-Hant.md)
-
-</details>
 
 ## Whisper 與 WhisperLive 的選擇
 
@@ -92,7 +75,8 @@ docker run \
 
 **重要：** 此映像執行預設 `base` 模型需要至少 700 MB 可用記憶體。記憶體為 512 MB 或更少的系統不受支援。
 
-**注：** 如需面向網際網路的部署，**強烈建議**使用[反向代理](#使用反向代理)來新增 HTTPS。此時，還應將上述 `docker run` 命令中的 `-p 9000:9000` 替換為 `-p 127.0.0.1:9000:9000`，以防止從外部直接存取未加密連接埠。
+> [!NOTE]
+> 如需面向網際網路的部署，請使用[反向代理](#使用反向代理)來新增 HTTPS。同時，請將上述 `docker run` 命令中的 `-p 9000:9000` 替換為 `-p 127.0.0.1:9000:9000`，以防止從外部直接存取未加密連接埠。
 
 首次啟動時，Whisper `base` 模型（約 145 MB）將自動下載並快取。查看日誌確認伺服器已就緒：
 
@@ -125,6 +109,23 @@ curl http://您的伺服器IP:9000/v1/audio/transcriptions \
 ```
 
 另外，你也可以在不使用 Docker 的情況下[安裝 Whisper](https://github.com/hwdsl2/whisper-install/blob/main/README-zh-Hant.md)。如需了解更多關於此映像的使用方法，請閱讀以下各節。
+
+## 社群
+
+- 📬 [取得專案更新與免費部署指南](https://selfhostedstack.beehiiv.com/subscribe?utm_campaign=ai-zh-hant)（每月 1–2 封電子郵件；指南為英文 PDF）
+- 💬 加入 [r/selfhostedstack](https://www.reddit.com/r/selfhostedstack/) 社群，參與討論與專案展示
+- ⭐ 如果你覺得本專案有用，請為儲存庫加星——這能幫助更多人發現它。
+
+<details>
+<summary>自託管 VPN 與網路專案</summary>
+
+- [Setup IPsec VPN](https://github.com/hwdsl2/setup-ipsec-vpn/blob/master/README-zh-Hant.md)
+- [Docker 上的 IPsec VPN](https://github.com/hwdsl2/docker-ipsec-vpn-server/blob/master/README-zh-Hant.md)
+- [WireGuard](https://github.com/hwdsl2/docker-wireguard/blob/main/README-zh-Hant.md)
+- [OpenVPN](https://github.com/hwdsl2/docker-openvpn/blob/main/README-zh-Hant.md)
+- [Headscale](https://github.com/hwdsl2/docker-headscale/blob/main/README-zh-Hant.md)
+
+</details>
 
 ## 系統需求
 
@@ -252,7 +253,8 @@ volumes:
     name: whisper-data
 ```
 
-**注：** 如需面向公網部署，強烈建議使用[反向代理](#使用反向代理)啟用 HTTPS。此時請將 `docker-compose.yml` 中的 `"9000:9000/tcp"` 改為 `"127.0.0.1:9000:9000/tcp"`，以防止未加密連接埠被直接存取。
+> [!NOTE]
+> 如需面向公網部署，請使用[反向代理](#使用反向代理)啟用 HTTPS。同時，請將 `docker-compose.yml` 中的 `"9000:9000/tcp"` 改為 `"127.0.0.1:9000:9000/tcp"`，以防止未加密連接埠被直接存取。
 
 <details>
 <summary><strong>使用 docker-compose 部署 GPU（NVIDIA CUDA）</strong></summary>
@@ -711,7 +713,10 @@ docker exec whisper whisper_manage --downloaddiarize
 ```
 
 **注意事項：**
-- 說話人分離需要完整音訊分析，**不支援串流模式**（`stream=true`）。兩者同時啟用時，說話人分離會被靜默跳過。
+
+> [!IMPORTANT]
+> 說話人分離需要完整音訊分析，**不支援串流模式**（`stream=true`）。兩者同時啟用時，說話人分離會被靜默跳過。
+
 - 如果已知確切說話人數量，設定 `WHISPER_DIARIZE_NUM_SPEAKERS` 可提高準確性。
 - 說話人分離在轉錄完成後執行，會增加與音訊時長成正比的少量處理時間。
 
