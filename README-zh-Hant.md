@@ -1,28 +1,32 @@
 [English](README.md) | [简体中文](README-zh.md) | [繁體中文](README-zh-Hant.md) | [Русский](README-ru.md)
 
-# Whisper 語音轉文字 Docker 映像檔
+# ScribeCrate
 
-[![建置狀態](https://github.com/hwdsl2/docker-whisper/actions/workflows/main.yml/badge.svg)](https://github.com/hwdsl2/docker-whisper/actions/workflows/main.yml) &nbsp;[![Docker Pulls](https://raw.githubusercontent.com/hwdsl2/badges/main/img/docker-pulls-whisper-server.svg)](https://hub.docker.com/r/hwdsl2/whisper-server) &nbsp;[![License: MIT](docs/images/license.svg)](https://opensource.org/licenses/MIT) &nbsp;[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://vpnsetup.net/whisper-notebook)
+**開源、自託管的音訊轉錄 API。**
 
-[Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack/blob/main/README-zh-Hant.md) 的一部分 ─ 一條命令部署完整的自託管 AI 技術棧。
+[![建置狀態](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml/badge.svg)](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml) &nbsp;[![Docker Pulls](https://raw.githubusercontent.com/hwdsl2/badges/main/img/docker-pulls-whisper-server.svg)](https://hub.docker.com/r/hwdsl2/whisper-server) &nbsp;[![License: MIT](docs/images/license.svg)](https://opensource.org/licenses/MIT) &nbsp;[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://vpnsetup.net/whisper-notebook)
 
-使用 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) 在 Docker 容器中執行 [Whisper](https://github.com/openai/whisper) 語音轉文字伺服器。提供 OpenAI 相容的音訊轉錄和翻譯 API。基於 Debian (python:3.12-slim)，簡單、私密、可自架。
+在您自己的硬體上轉錄音訊、產生字幕，並將語音翻譯為英語。ScribeCrate 使用 [Whisper](https://github.com/openai/whisper) 模型，由 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) 驅動，提供相容 OpenAI 的轉錄和翻譯端點。可透過 Docker 部署，使用 CPU 或 NVIDIA GPU 執行。
 
-**功能特性：**
+> 本專案原名 **docker-whisper**，仍由 [hwdsl2](https://github.com/hwdsl2) 維護。Docker 映像名稱保持為 `hwdsl2/whisper-server`；現有設定、API 端點和持久化資料繼續相容。
 
-- OpenAI 相容的 `POST /v1/audio/transcriptions` 和 `POST /v1/audio/translations` 端點 — 任何呼叫 OpenAI Whisper API 的應用程式只需修改一行設定即可切換
-- 支援所有 Whisper 模型：`tiny`、`base`、`small`、`medium`、`large-v3`、`large-v3-turbo` 等
-- 說話人分離 — 識別每個片段中的說話人（可選的本地擴充，透過 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 實現）
-- 透過輔助腳本 (`whisper_manage`) 管理模型
-- 音訊資料保留在您的伺服器上，不傳送給第三方
-- 支援所有主流音訊格式（mp3、m4a、wav、webm、ogg、flac 及 ffmpeg 支援的所有格式）
-- 多種回應格式：JSON、純文字、詳細 JSON、SRT 字幕、WebVTT 字幕
-- 串流轉錄 — 加入 `stream=true` 參數，即可透過 SSE 在解碼時逐段接收轉錄結果，無需等待整個檔案處理完成
-- NVIDIA GPU (CUDA) 加速推論（使用 `:cuda` 映像標籤）
-- 離線/隔離網路模式 — 使用預先快取的模型無需網際網路存取 (`WHISPER_LOCAL_ONLY`)
-- 透過 [GitHub Actions](https://github.com/hwdsl2/docker-whisper/actions) 自動建置和發布
-- 透過 Docker 資料卷持久化模型快取
-- 多架構支援：`linux/amd64`、`linux/arm64`
+## 功能特性
+
+- **相容 OpenAI 的 API：** 提供 `POST /v1/audio/transcriptions` 和 `POST /v1/audio/translations` 端點，可與支援 OpenAI Whisper API 的用戶端整合。
+- **Whisper 模型支援：** 可選擇 `tiny`、`base`、`small`、`medium`、`large-v3`、`large-v3-turbo` 等模型。
+- **說話人分離：** 透過可選的本地 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 擴充，識別每個片段中的說話人。
+- **模型管理：** 使用 `whisper_manage` 查看伺服器設定和預先下載模型；透過 `WHISPER_MODEL` 切換模型。
+- **本地音訊處理：** 音訊保留在您的伺服器上，不傳送給第三方進行轉錄。
+- **廣泛的音訊格式支援：** 支援 MP3、M4A、WAV、WebM、OGG、FLAC 及 FFmpeg 支援的其他音訊格式。
+- **彈性的輸出格式：** JSON、純文字、詳細 JSON、SRT 字幕和 WebVTT 字幕。
+- **串流結果：** 加入 `stream=true`，即可在解碼時透過 Server-Sent Events（SSE）逐段接收轉錄結果，無需等待整個上傳檔案處理完成。
+- **GPU 加速：** 使用 `:cuda` 映像透過 NVIDIA GPU 加速推論。CUDA 映像支援 `linux/amd64`。
+- **離線執行：** 使用預先快取的模型和 `WHISPER_LOCAL_ONLY`，無需存取網際網路即可執行。
+- **自動建置：** 映像透過 [GitHub Actions](https://github.com/hwdsl2/scribecrate/actions) 自動建置和發佈，建置工作流程公開可查。
+- **持久化模型快取：** 透過 Docker 資料卷，在容器更新後繼續使用已下載的模型。
+- **多架構支援：** CPU 映像支援 `linux/amd64` 和 `linux/arm64`。
+
+也可作為 [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack/blob/main/README-zh-Hant.md) 的一部分使用，一條命令即可部署完整的自託管 AI 技術堆疊。
 
 > 📘 [The Self-Hosted AI Builder’s Guide](https://books2read.com/aiguide?store=amazon) 是一本關於建置、保護和維運自己的私有 AI 技術堆疊的實用指南。
 
@@ -31,19 +35,9 @@
 - 線上試用：[在 Colab 中開啟](https://vpnsetup.net/whisper-notebook)——無需 Docker 或安裝
 - 相關 AI 服務：[WhisperLive](https://github.com/hwdsl2/docker-whisper-live/blob/main/README-zh-Hant.md)、[Kokoro](https://github.com/hwdsl2/docker-kokoro/blob/main/README-zh-Hant.md)、[Embeddings](https://github.com/hwdsl2/docker-embeddings/blob/main/README-zh-Hant.md)、[LiteLLM](https://github.com/hwdsl2/docker-litellm/blob/main/README-zh-Hant.md)、[Ollama](https://github.com/hwdsl2/docker-ollama/blob/main/README-zh-Hant.md)、[Docling](https://github.com/hwdsl2/docker-docling/blob/main/README-zh-Hant.md)、[MCP Gateway](https://github.com/hwdsl2/docker-mcp-gateway/blob/main/README-zh-Hant.md)
 
-## Whisper 與 WhisperLive 的選擇
-
-| | **docker-whisper** | [docker-whisper-live](https://github.com/hwdsl2/docker-whisper-live/blob/main/README-zh-Hant.md) |
-|---|---|---|
-| **使用情境** | 轉錄完整音訊檔案 | 即時麥克風/音訊串流 |
-| **協定** | HTTP REST | WebSocket（串流）+ HTTP REST |
-| **延遲** | 完整檔案處理後回傳結果 | 近即時，逐字輸出 |
-| **適合** | 會議錄音、上傳的音訊檔案 | 瀏覽器擷取、RTSP 串流、即時字幕 |
-| **映像大小** | ~190 MB（`:cuda` 約 3.1 GB） | ~750 MB（`:cuda` 約 4.5 GB） |
-
 ## 快速開始
 
-使用以下指令啟動 Whisper 伺服器：
+使用以下指令啟動 ScribeCrate：
 
 ```bash
 docker run \
@@ -84,10 +78,17 @@ docker run \
 docker logs whisper
 ```
 
-看到 "Whisper speech-to-text server is ready" 後，開始轉錄您的第一個音訊檔案：
+看到 "ScribeCrate transcription server is ready" 後，取得全新安裝在上述持久化資料卷中自動產生的 API 金鑰：
+
+```bash
+scribecrate_api_key="$(docker exec whisper whisper_manage --getkey)"
+```
+
+轉錄您的第一個音訊檔案，將 `您的伺服器IP` 替換為伺服器位址，並將 `audio.mp3` 替換為您的音訊檔案：
 
 ```bash
 curl http://您的伺服器IP:9000/v1/audio/transcriptions \
+    -H "Authorization: Bearer $scribecrate_api_key" \
     -F file=@audio.mp3 \
     -F model=whisper-1
 ```
@@ -104,11 +105,22 @@ curl -L -o sample_speech.wav \
     "https://github.com/Azure-Samples/cognitive-services-speech-sdk/raw/master/sampledata/audiofiles/katiesteve.wav"
 
 curl http://您的伺服器IP:9000/v1/audio/transcriptions \
+    -H "Authorization: Bearer $scribecrate_api_key" \
     -F file=@sample_speech.wav \
     -F model=whisper-1
 ```
 
 另外，你也可以在不使用 Docker 的情況下[安裝 Whisper](https://github.com/hwdsl2/whisper-install/blob/main/README-zh-Hant.md)。如需了解更多關於此映像的使用方法，請閱讀以下各節。
+
+## ScribeCrate 與 WhisperLive 的選擇
+
+| | **ScribeCrate** | [WhisperLive](https://github.com/hwdsl2/docker-whisper-live/blob/main/README-zh-Hant.md) |
+|---|---|---|
+| **使用情境** | 轉錄完整音訊檔案 | 即時麥克風/音訊串流 |
+| **協定** | HTTP REST | WebSocket（串流）+ HTTP REST |
+| **延遲** | 處理完成後回傳 JSON；SSE 逐段回傳 | 近即時，逐字輸出 |
+| **適合** | 會議錄音、上傳的音訊檔案 | 瀏覽器擷取、RTSP 串流、即時字幕 |
+| **映像大小** | ~190 MB（`:cuda` 約 3.1 GB） | ~750 MB（`:cuda` 約 4.5 GB） |
 
 ## 社群
 
@@ -298,13 +310,20 @@ volumes:
 
 ## API 參考
 
-此 API 與 OpenAI 的[音訊轉錄端點](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create)和[音訊翻譯端點](https://developers.openai.com/api/reference/resources/audio/subresources/translations/methods/create)相容。任何已呼叫 `https://api.openai.com/v1/audio/transcriptions` 的應用程式，只需設定以下環境變數即可切換至自架服務：
+ScribeCrate 提供相容 OpenAI [音訊轉錄](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create)和[音訊翻譯](https://developers.openai.com/api/reference/resources/audio/subresources/translations/methods/create)介面的端點。使用 OpenAI SDK 的用戶端應設定基礎 URL，並使用您的 ScribeCrate API 金鑰：
+
+**身分驗證：** 全新的持久化安裝需要 API 金鑰。使用以下指令取得金鑰，供 SDK 設定和下面的 `curl` 範例使用：
+
+```bash
+scribecrate_api_key="$(docker exec whisper whisper_manage --getkey)"
+
+export OPENAI_BASE_URL="http://您的伺服器IP:9000/v1"
+export OPENAI_API_KEY="$scribecrate_api_key"
+```
+
+如果已停用 API 金鑰驗證，請省略 curl 範例中的 `Authorization` 標頭。OpenAI SDK 用戶端仍要求提供非空金鑰；此時請設定 `OPENAI_API_KEY=unused`。
 
 說話人分離啟用時是本地 sherpa-onnx 擴充，並不等同於 OpenAI 的說話人分離模型。OpenAI 專用的轉錄選項（如 `gpt-4o-transcribe-diarize`、`response_format=diarized_json`、`include=logprobs`、`chunking_strategy`、`known_speaker_names` 和 `known_speaker_references`）不受支援，並會回傳 `400`。
-
-```
-OPENAI_BASE_URL=http://您的伺服器IP:9000
-```
 
 ### 轉錄音訊
 
@@ -332,6 +351,7 @@ Content-Type: multipart/form-data
 
 ```bash
 curl http://您的伺服器IP:9000/v1/audio/transcriptions \
+    -H "Authorization: Bearer $scribecrate_api_key" \
     -F file=@meeting.m4a \
     -F model=whisper-1 \
     -F language=zh
@@ -360,6 +380,7 @@ curl http://您的伺服器IP:9000/v1/audio/transcriptions \
 
 ```bash
 curl http://您的伺服器IP:9000/v1/audio/transcriptions \
+    -H "Authorization: Bearer $scribecrate_api_key" \
     -F file=@long-audio.mp3 \
     -F model=whisper-1 \
     -F stream=true
@@ -389,7 +410,9 @@ form.append("model", "whisper-1");
 form.append("stream", "true");
 
 const res = await fetch("http://您的伺服器IP:9000/v1/audio/transcriptions", {
-  method: "POST", body: form,
+  method: "POST",
+  headers: { Authorization: "Bearer your_api_key" },
+  body: form,
 });
 
 const reader = res.body.getReader();
@@ -420,6 +443,7 @@ while (true) {
 
 ```bash
 curl http://您的伺服器IP:9000/v1/audio/transcriptions \
+    -H "Authorization: Bearer $scribecrate_api_key" \
     -F file=@video.mp4 \
     -F model=whisper-1 \
     -F response_format=srt
@@ -429,6 +453,7 @@ curl http://您的伺服器IP:9000/v1/audio/transcriptions \
 
 ```bash
 curl http://您的伺服器IP:9000/v1/audio/transcriptions \
+    -H "Authorization: Bearer $scribecrate_api_key" \
     -F file=@audio.mp3 \
     -F model=whisper-1 \
     -F response_format=verbose_json
@@ -438,6 +463,7 @@ curl http://您的伺服器IP:9000/v1/audio/transcriptions \
 
 ```bash
 curl http://您的伺服器IP:9000/v1/audio/transcriptions \
+    -H "Authorization: Bearer $scribecrate_api_key" \
     -F file=@audio.mp3 \
     -F model=whisper-1 \
     -F response_format=verbose_json \
@@ -470,6 +496,7 @@ Content-Type: multipart/form-data
 
 ```bash
 curl http://您的伺服器IP:9000/v1/audio/translations \
+    -H "Authorization: Bearer $scribecrate_api_key" \
     -F file=@french_audio.mp3 \
     -F model=whisper-1
 ```
@@ -483,7 +510,7 @@ GET /v1/models
 以 OpenAI 相容格式回傳目前啟用的模型。
 
 ```bash
-curl http://您的伺服器IP:9000/v1/models
+curl http://您的伺服器IP:9000/v1/models -H "Authorization: Bearer $scribecrate_api_key"
 ```
 
 ### 互動式 API 文件
@@ -572,7 +599,7 @@ docker exec whisper whisper_manage --downloadmodel large-v3-turbo
 
 ## 保護你的伺服器
 
-如果你的 Whisper 伺服器可從公用網際網路存取 —— 即使只是短暫可達 —— 也請至少採取以下保護措施。Whisper 對 CPU/GPU 資源消耗較大，未做身分驗證的介面可能被濫用，浪費你的運算資源。
+如果你的 ScribeCrate 伺服器可從公用網際網路存取 —— 即使只是短暫可達 —— 也請至少採取以下保護措施。轉錄對 CPU/GPU 資源消耗較大，未做身分驗證的介面可能被濫用，浪費你的運算資源。
 
 **1. 使用 API 金鑰。** 掛載 `/var/lib/whisper` 資料卷的新安裝會自動產生 API 金鑰。可用 `docker exec whisper whisper_manage --showkey` 查看；腳本中可用 `docker exec whisper whisper_manage --getkey`。沒有金鑰的既有安裝會保持開放以相容舊行為；也可以在 `env` 檔案中設定 `WHISPER_API_KEY` 手動啟用驗證。所有已驗證請求必須包含 `Authorization: Bearer <key>`。
 
@@ -593,11 +620,11 @@ openssl rand -hex 32
 
 ## 使用反向代理
 
-如需面向公網部署，可在 Whisper 前置反向代理處理 HTTPS 終止。在本地或可信網路中使用無需 HTTPS，但將 API 端點暴露在公網時建議啟用 HTTPS。
+如需面向公網部署，可在 ScribeCrate 前置反向代理處理 HTTPS 終止。在本地或可信網路中使用無需 HTTPS，但將 API 端點暴露在公網時建議啟用 HTTPS。
 
-從反向代理存取 Whisper 容器時使用以下位址之一：
+從反向代理存取 ScribeCrate 容器時使用以下位址之一：
 
-- **`whisper:9000`** — 如果反向代理作為容器執行在與 Whisper **同一 Docker 網路**中（例如定義在同一 `docker-compose.yml` 中）。
+- **`whisper:9000`** — 如果反向代理作為容器執行在與 ScribeCrate **同一 Docker 網路**中（例如定義在同一 `docker-compose.yml` 中）。
 - **`127.0.0.1:9000`** — 如果反向代理執行在**主機上**且連接埠 `9000` 已發布（預設 `docker-compose.yml` 會發布該連接埠）。
 
 **使用 [Caddy](https://caddyserver.com/docs/)（[Docker 映像檔](https://hub.docker.com/_/caddy)）的範例**（自動 Let's Encrypt TLS，反向代理在同一 Docker 網路中）：
@@ -659,7 +686,7 @@ docker rm -f whisper
 
 ## 與其他 AI 服務搭配使用
 
-Whisper 可作為更廣泛的自託管 AI 設定中的語音轉文字服務。
+ScribeCrate 可作為更廣泛的自託管 AI 設定中的語音轉文字服務。
 
 如需完整和輕量級 Docker Compose 技術堆疊、手動 `docker run` 範例，以及結合 Kokoro、Embeddings、LiteLLM、Ollama、Docling 和 MCP Gateway 的語音/RAG/MCP 流水線範例，請參閱 [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack/blob/main/README-zh-Hant.md)。
 
@@ -743,4 +770,4 @@ docker exec whisper whisper_manage --downloaddiarize
 
 **faster-whisper** 著作權歸 SYSTRAN 所有，依據 [MIT 授權條款](https://github.com/SYSTRAN/faster-whisper/blob/master/LICENSE)發行。
 
-本專案是 Whisper 的獨立 Docker 封裝，與 OpenAI 或 SYSTRAN 無關聯，未獲其背書或贊助。
+ScribeCrate 是使用 Whisper 模型的獨立伺服器，與 OpenAI 或 SYSTRAN 無關聯，未獲其背書或贊助。

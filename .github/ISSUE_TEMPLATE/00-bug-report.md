@@ -8,9 +8,9 @@ assignees: ''
 ---
 **Checklist**
 
-- [ ] I read the [README](https://github.com/hwdsl2/docker-whisper/blob/main/README.md) or the relevant section
-- [ ] I searched existing [Issues](https://github.com/hwdsl2/docker-whisper/issues?q=is%3Aissue)
-- [ ] This issue is about the Whisper Docker image/config/API, not only faster-whisper itself
+- [ ] I read the [README](https://github.com/hwdsl2/scribecrate/blob/main/README.md) or the relevant section
+- [ ] I searched existing [Issues](https://github.com/hwdsl2/scribecrate/issues?q=is%3Aissue)
+- [ ] This issue is about the ScribeCrate Docker image/config/API, not only faster-whisper itself
 
 <!---
 If this is a reproducible bug in the transcription engine itself, it may belong in faster-whisper: https://github.com/SYSTRAN/faster-whisper. This project uses faster-whisper as its runtime engine; OpenAI compatibility refers to the API shape and Whisper model family.

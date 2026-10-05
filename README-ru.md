@@ -1,28 +1,32 @@
 [English](README.md) | [简体中文](README-zh.md) | [繁體中文](README-zh-Hant.md) | [Русский](README-ru.md)
 
-# Whisper — распознавание речи на Docker
+# ScribeCrate
 
-[![Статус сборки](https://github.com/hwdsl2/docker-whisper/actions/workflows/main.yml/badge.svg)](https://github.com/hwdsl2/docker-whisper/actions/workflows/main.yml) &nbsp;[![Docker Pulls](https://raw.githubusercontent.com/hwdsl2/badges/main/img/docker-pulls-whisper-server.svg)](https://hub.docker.com/r/hwdsl2/whisper-server) &nbsp;[![License: MIT](docs/images/license.svg)](https://opensource.org/licenses/MIT) &nbsp;[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://vpnsetup.net/whisper-notebook)
+**API для транскрибации на собственном сервере с открытым исходным кодом.**
 
-Часть [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack/blob/main/README-ru.md) — разверните полный самостоятельно размещённый AI-стек одной командой.
+[![Статус сборки](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml/badge.svg)](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml) &nbsp;[![Docker Pulls](https://raw.githubusercontent.com/hwdsl2/badges/main/img/docker-pulls-whisper-server.svg)](https://hub.docker.com/r/hwdsl2/whisper-server) &nbsp;[![License: MIT](docs/images/license.svg)](https://opensource.org/licenses/MIT) &nbsp;[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://vpnsetup.net/whisper-notebook)
 
-Docker-образ для запуска сервера распознавания речи [Whisper](https://github.com/openai/whisper) на базе [faster-whisper](https://github.com/SYSTRAN/faster-whisper). Предоставляет совместимые с OpenAI API для транскрибирования и перевода аудио. Основан на Debian (python:3.12-slim). Простой, приватный, для самостоятельного развёртывания.
+Транскрибируйте аудио, создавайте субтитры и переводите речь на английский язык на собственном оборудовании. ScribeCrate предоставляет совместимые с OpenAI конечные точки транскрибации и перевода, используя модели [Whisper](https://github.com/openai/whisper) и движок [faster-whisper](https://github.com/SYSTRAN/faster-whisper). Разверните сервер с помощью Docker на CPU или NVIDIA GPU.
 
-**Возможности:**
+> Ранее проект назывался **docker-whisper**. Его по-прежнему поддерживает [hwdsl2](https://github.com/hwdsl2). Имя Docker-образа остаётся `hwdsl2/whisper-server`; существующие настройки, конечные точки API и постоянные данные сохраняют совместимость.
 
-- Совместимые с OpenAI эндпоинты `POST /v1/audio/transcriptions` и `POST /v1/audio/translations` — любое приложение, использующее OpenAI Whisper API, переключается с изменением одной строки
-- Поддержка всех моделей Whisper: `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo` и других
-- Диаризация говорящих — определение, кто говорит в каждом сегменте (опциональное локальное расширение через [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx))
-- Управление моделями через вспомогательный скрипт (`whisper_manage`)
-- Аудиоданные остаются на вашем сервере — никакие данные не отправляются третьим сторонам
-- Поддержка всех популярных аудиоформатов (mp3, m4a, wav, webm, ogg, flac и всех форматов ffmpeg)
-- Несколько форматов ответа: JSON, простой текст, подробный JSON, субтитры SRT, субтитры WebVTT
-- Потоковое транскрибирование — добавьте `stream=true`, чтобы получать сегменты через SSE по мере декодирования, без ожидания обработки всего файла
-- Ускорение на GPU NVIDIA (CUDA) для более быстрого инференса (тег образа `:cuda`)
-- Офлайн-режим — работа без доступа к интернету с предварительно кэшированными моделями (`WHISPER_LOCAL_ONLY`)
-- Автоматически собирается и публикуется через [GitHub Actions](https://github.com/hwdsl2/docker-whisper/actions)
-- Постоянный кэш моделей через Docker-том
-- Поддержка нескольких архитектур: `linux/amd64`, `linux/arm64`
+## Возможности
+
+- **Совместимый с OpenAI API:** конечные точки `POST /v1/audio/transcriptions` и `POST /v1/audio/translations` для интеграции с клиентами, поддерживающими OpenAI Whisper API.
+- **Поддержка моделей Whisper:** выбор моделей `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo` и других.
+- **Диаризация:** определение говорящего в каждом сегменте с помощью необязательного локального расширения [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx).
+- **Управление моделями:** просмотр настроек сервера и предварительная загрузка моделей с помощью `whisper_manage`; переключение моделей через `WHISPER_MODEL`.
+- **Локальная обработка аудио:** аудио остаётся на вашем сервере и не отправляется третьим сторонам для транскрибации.
+- **Широкая поддержка аудиоформатов:** MP3, M4A, WAV, WebM, OGG, FLAC и другие аудиоформаты, поддерживаемые FFmpeg.
+- **Гибкие форматы вывода:** JSON, обычный текст, подробный JSON, субтитры SRT и WebVTT.
+- **Потоковая выдача результатов:** добавьте `stream=true`, чтобы получать сегменты транскрипции через Server-Sent Events по мере декодирования, не дожидаясь завершения обработки всего загруженного файла.
+- **Ускорение на GPU:** образ `:cuda` обеспечивает ускорение обработки с NVIDIA GPU. CUDA-образ поддерживает `linux/amd64`.
+- **Автономная работа:** запуск без доступа к интернету с предварительно кэшированными моделями и `WHISPER_LOCAL_ONLY`.
+- **Автоматическая сборка:** образы автоматически собираются и публикуются через [GitHub Actions](https://github.com/hwdsl2/scribecrate/actions); рабочие процессы сборки доступны публично.
+- **Постоянный кэш моделей:** том Docker позволяет повторно использовать загруженные модели после обновления контейнера.
+- **Несколько архитектур:** CPU-образы поддерживают `linux/amd64` и `linux/arm64`.
+
+Также доступен в составе [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack/blob/main/README-ru.md), который развёртывает полный AI-стек на собственном сервере одной командой.
 
 > 📘 [The Self-Hosted AI Builder’s Guide](https://books2read.com/aiguide?store=amazon): практическое руководство по созданию, защите и эксплуатации собственного приватного ИИ-стека.
 
@@ -31,19 +35,9 @@ Docker-образ для запуска сервера распознавани�
 - Попробовать онлайн: [Открыть в Colab](https://vpnsetup.net/whisper-notebook) — Docker и установка не требуются
 - Связанные AI-сервисы: [WhisperLive](https://github.com/hwdsl2/docker-whisper-live/blob/main/README-ru.md), [Kokoro](https://github.com/hwdsl2/docker-kokoro/blob/main/README-ru.md), [Embeddings](https://github.com/hwdsl2/docker-embeddings/blob/main/README-ru.md), [LiteLLM](https://github.com/hwdsl2/docker-litellm/blob/main/README-ru.md), [Ollama](https://github.com/hwdsl2/docker-ollama/blob/main/README-ru.md), [Docling](https://github.com/hwdsl2/docker-docling/blob/main/README-ru.md), [MCP Gateway](https://github.com/hwdsl2/docker-mcp-gateway/blob/main/README-ru.md)
 
-## Whisper или WhisperLive?
-
-| | **docker-whisper** | [docker-whisper-live](https://github.com/hwdsl2/docker-whisper-live/blob/main/README-ru.md) |
-|---|---|---|
-| **Назначение** | Транскрибирование готовых аудиофайлов | Живой микрофон / потоковое аудио в реальном времени |
-| **Протокол** | HTTP REST | WebSocket (потоковый) + HTTP REST |
-| **Задержка** | Ответ после обработки всего файла | Почти мгновенно, слово за словом |
-| **Подходит для** | Записи совещаний, загруженные аудиофайлы | Захват в браузере, RTSP-потоки, живые субтитры |
-| **Размер образа** | ~190 МБ (~3,1 ГБ для `:cuda`) | ~750 МБ (~4,5 ГБ для `:cuda`) |
-
 ## Быстрый старт
 
-Запустите сервер Whisper следующей командой:
+Запустите ScribeCrate следующей командой:
 
 ```bash
 docker run \
@@ -84,10 +78,17 @@ docker run \
 docker logs whisper
 ```
 
-После появления сообщения "Whisper speech-to-text server is ready" можно начинать транскрибирование:
+После появления сообщения "ScribeCrate transcription server is ready" получите API-ключ, автоматически созданный при новой установке с постоянным томом, указанным выше:
+
+```bash
+scribecrate_api_key="$(docker exec whisper whisper_manage --getkey)"
+```
+
+Транскрибируйте первый аудиофайл, заменив `IP_вашего_сервера` адресом своего сервера, а `audio.mp3` своим аудиофайлом:
 
 ```bash
 curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
+    -H "Authorization: Bearer $scribecrate_api_key" \
     -F file=@audio.mp3 \
     -F model=whisper-1
 ```
@@ -104,11 +105,22 @@ curl -L -o sample_speech.wav \
     "https://github.com/Azure-Samples/cognitive-services-speech-sdk/raw/master/sampledata/audiofiles/katiesteve.wav"
 
 curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
+    -H "Authorization: Bearer $scribecrate_api_key" \
     -F file=@sample_speech.wav \
     -F model=whisper-1
 ```
 
 В качестве альтернативы вы можете [настроить Whisper без Docker](https://github.com/hwdsl2/whisper-install/blob/main/README-ru.md). Чтобы узнать больше об использовании этого образа, ознакомьтесь с разделами ниже.
+
+## ScribeCrate и WhisperLive: что выбрать
+
+| | **ScribeCrate** | [WhisperLive](https://github.com/hwdsl2/docker-whisper-live/blob/main/README-ru.md) |
+|---|---|---|
+| **Назначение** | Транскрибирование готовых аудиофайлов | Живой микрофон / потоковое аудио в реальном времени |
+| **Протокол** | HTTP REST | WebSocket (потоковый) + HTTP REST |
+| **Задержка** | JSON после обработки; сегменты через SSE | Почти мгновенно, слово за словом |
+| **Подходит для** | Записи совещаний, загруженные аудиофайлы | Захват в браузере, RTSP-потоки, живые субтитры |
+| **Размер образа** | ~190 МБ (~3,1 ГБ для `:cuda`) | ~750 МБ (~4,5 ГБ для `:cuda`) |
 
 ## Сообщество
 
@@ -298,13 +310,20 @@ volumes:
 
 ## Справочник по API
 
-API совместим с [эндпоинтом транскрибирования](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create) и [эндпоинтом перевода](https://developers.openai.com/api/reference/resources/audio/subresources/translations/methods/create) OpenAI. Любое приложение, использующее `https://api.openai.com/v1/audio/transcriptions`, может переключиться на собственный хостинг, установив:
+ScribeCrate предоставляет конечные точки, совместимые с интерфейсами [транскрибации аудио](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create) и [перевода аудио](https://developers.openai.com/api/reference/resources/audio/subresources/translations/methods/create) OpenAI. Для клиентов, использующих OpenAI SDK, настройте базовый URL и укажите свой API-ключ ScribeCrate:
+
+**Аутентификация:** Для новых установок с постоянным томом требуется API-ключ. Получите его для настройки SDK и примеров `curl` ниже:
+
+```bash
+scribecrate_api_key="$(docker exec whisper whisper_manage --getkey)"
+
+export OPENAI_BASE_URL="http://IP_вашего_сервера:9000/v1"
+export OPENAI_API_KEY="$scribecrate_api_key"
+```
+
+Если аутентификация по API-ключу отключена, опустите заголовок `Authorization` в примерах curl. Клиентам OpenAI SDK по-прежнему нужен непустой ключ; в этом случае задайте `OPENAI_API_KEY=unused`.
 
 Диаризация говорящих, если включена, является локальным расширением на базе sherpa-onnx и не эквивалентна моделям диаризации OpenAI. Параметры транскрибирования, специфичные для OpenAI, такие как `gpt-4o-transcribe-diarize`, `response_format=diarized_json`, `include=logprobs`, `chunking_strategy`, `known_speaker_names` и `known_speaker_references`, не поддерживаются и возвращают `400`.
-
-```
-OPENAI_BASE_URL=http://IP_вашего_сервера:9000
-```
 
 ### Транскрибирование аудио
 
@@ -332,6 +351,7 @@ Content-Type: multipart/form-data
 
 ```bash
 curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
+    -H "Authorization: Bearer $scribecrate_api_key" \
     -F file=@meeting.m4a \
     -F model=whisper-1 \
     -F language=ru
@@ -360,6 +380,7 @@ curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
 
 ```bash
 curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
+    -H "Authorization: Bearer $scribecrate_api_key" \
     -F file=@long-audio.mp3 \
     -F model=whisper-1 \
     -F stream=true
@@ -389,7 +410,9 @@ form.append("model", "whisper-1");
 form.append("stream", "true");
 
 const res = await fetch("http://IP_вашего_сервера:9000/v1/audio/transcriptions", {
-  method: "POST", body: form,
+  method: "POST",
+  headers: { Authorization: "Bearer your_api_key" },
+  body: form,
 });
 
 const reader = res.body.getReader();
@@ -420,6 +443,7 @@ while (true) {
 
 ```bash
 curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
+    -H "Authorization: Bearer $scribecrate_api_key" \
     -F file=@video.mp4 \
     -F model=whisper-1 \
     -F response_format=srt
@@ -429,6 +453,7 @@ curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
 
 ```bash
 curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
+    -H "Authorization: Bearer $scribecrate_api_key" \
     -F file=@audio.mp3 \
     -F model=whisper-1 \
     -F response_format=verbose_json
@@ -438,6 +463,7 @@ curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
 
 ```bash
 curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
+    -H "Authorization: Bearer $scribecrate_api_key" \
     -F file=@audio.mp3 \
     -F model=whisper-1 \
     -F response_format=verbose_json \
@@ -470,6 +496,7 @@ Content-Type: multipart/form-data
 
 ```bash
 curl http://IP_вашего_сервера:9000/v1/audio/translations \
+    -H "Authorization: Bearer $scribecrate_api_key" \
     -F file=@french_audio.mp3 \
     -F model=whisper-1
 ```
@@ -483,7 +510,7 @@ GET /v1/models
 Возвращает активную модель в совместимом с OpenAI формате.
 
 ```bash
-curl http://IP_вашего_сервера:9000/v1/models
+curl http://IP_вашего_сервера:9000/v1/models -H "Authorization: Bearer $scribecrate_api_key"
 ```
 
 ### Интерактивная документация API
@@ -572,7 +599,7 @@ docker exec whisper whisper_manage --downloadmodel large-v3-turbo
 
 ## Защита сервера
 
-Если ваш сервер Whisper доступен из публичной сети — даже кратковременно — примените как минимум следующие меры защиты. Whisper требует значительных ресурсов CPU/GPU, поэтому неаутентифицированная конечная точка может быть использована для расходования ваших вычислительных ресурсов.
+Если ваш сервер ScribeCrate доступен из публичной сети — даже кратковременно — примените как минимум следующие меры защиты. Транскрибация требует значительных ресурсов CPU/GPU, поэтому неаутентифицированная конечная точка может быть использована для расходования ваших вычислительных ресурсов.
 
 **1. Используйте API-ключ.** Новые установки с подключённым томом `/var/lib/whisper` автоматически генерируют API-ключ. Его можно посмотреть командой `docker exec whisper whisper_manage --showkey`; в скриптах используйте `docker exec whisper whisper_manage --getkey`. Существующие установки без ключа остаются открытыми для обратной совместимости; также можно задать `WHISPER_API_KEY` в env-файле вручную. Все аутентифицированные запросы должны содержать `Authorization: Bearer <key>`.
 
@@ -593,11 +620,11 @@ openssl rand -hex 32
 
 ## Использование обратного прокси
 
-Для развёртывания с выходом в интернет разместите обратный прокси перед Whisper для обработки HTTPS-терминации. Сервер работает без HTTPS в локальной или доверенной сети, но HTTPS рекомендуется при открытом доступе к API-эндпоинту из интернета.
+Для развёртывания с выходом в интернет разместите обратный прокси перед ScribeCrate для обработки HTTPS-терминации. Сервер работает без HTTPS в локальной или доверенной сети, но HTTPS рекомендуется при открытом доступе к API-эндпоинту из интернета.
 
-Используйте один из следующих адресов для доступа к контейнеру Whisper из обратного прокси:
+Используйте один из следующих адресов для доступа к контейнеру ScribeCrate из обратного прокси:
 
-- **`whisper:9000`** — если ваш обратный прокси работает как контейнер в **той же Docker-сети**, что и Whisper (например, определён в том же `docker-compose.yml`).
+- **`whisper:9000`** — если ваш обратный прокси работает как контейнер в **той же Docker-сети**, что и ScribeCrate (например, определён в том же `docker-compose.yml`).
 - **`127.0.0.1:9000`** — если ваш обратный прокси работает **на хосте** и порт `9000` опубликован (по умолчанию `docker-compose.yml` публикует его).
 
 **Пример с [Caddy](https://caddyserver.com/docs/) ([Docker-образ](https://hub.docker.com/_/caddy))** (автоматический TLS через Let's Encrypt, обратный прокси в той же Docker-сети):
@@ -659,7 +686,7 @@ docker rm -f whisper
 
 ## Использование с другими AI-сервисами
 
-Whisper можно использовать как службу распознавания речи в более широком self-hosted AI-стеке.
+ScribeCrate можно использовать как службу распознавания речи в более широком self-hosted AI-стеке.
 
 Готовые полные и облегчённые стеки Docker Compose, примеры ручного запуска через `docker run`, а также примеры голосовых, RAG- и MCP-конвейеров с Kokoro, Embeddings, LiteLLM, Ollama, Docling и MCP Gateway см. в [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack/blob/main/README-ru.md).
 
@@ -743,4 +770,4 @@ Copyright (C) 2026 Lin Song
 
 **faster-whisper** является собственностью SYSTRAN и распространяется под [лицензией MIT](https://github.com/SYSTRAN/faster-whisper/blob/master/LICENSE).
 
-Данный проект представляет собой независимую Docker-обёртку для Whisper и не аффилирован с OpenAI или SYSTRAN, не одобрен и не спонсирован ими.
+ScribeCrate представляет собой независимый сервер на основе моделей Whisper и не аффилирован с OpenAI или SYSTRAN, не одобрен и не спонсирован ими.
