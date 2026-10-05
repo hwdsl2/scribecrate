@@ -13,6 +13,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
 
 # faster-whisper decodes audio via the PyAV library (bundled FFmpeg libraries).
+# PyAV 19 removed metadata_errors, which faster-whisper's decoder still uses.
 # curl is used by run.sh for the public-IP lookup and the health-check poll.
 RUN set -x \
     && apt-get update \
@@ -21,6 +22,7 @@ RUN set -x \
     && pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir --uploaded-prior-to P7D \
          faster-whisper \
+         "av>=11,<19" \
          fastapi \
          "uvicorn[standard]" \
          python-multipart \
