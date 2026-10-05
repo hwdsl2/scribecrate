@@ -4,7 +4,7 @@ Speaker diarization via sherpa-onnx (ONNX Runtime, no PyTorch).
 Downloads ONNX models on first use and provides speaker-segment alignment
 for Whisper transcription output.
 
-https://github.com/hwdsl2/docker-whisper
+https://github.com/hwdsl2/scribecrate
 
 Copyright (C) 2026 Lin Song <linsongui@gmail.com>
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Whisper Speech-to-Text API Server
+ScribeCrate Transcription API Server
 Provides OpenAI-compatible /v1/audio/transcriptions and
 /v1/audio/translations endpoints powered by faster-whisper.
 
-https://github.com/hwdsl2/docker-whisper
+https://github.com/hwdsl2/scribecrate
 
 Copyright (C) 2026 Lin Song <linsongui@gmail.com>
 
@@ -175,10 +175,12 @@ async def _lifespan(app: FastAPI):
 # ---------------------------------------------------------------------------
 
 app = FastAPI(
-    title="Whisper Speech-to-Text",
+    title="ScribeCrate",
     description=(
-        "OpenAI-compatible speech-to-text API powered by faster-whisper.\n\n"
-        "https://github.com/hwdsl2/docker-whisper"
+        "Open-source, self-hosted transcription and English translation API "
+        "powered by faster-whisper. OpenAI-compatible transcription and "
+        "translation endpoints.\n\n"
+        "https://github.com/hwdsl2/scribecrate"
     ),
     version="1.0.0",
     lifespan=_lifespan,

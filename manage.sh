@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# https://github.com/hwdsl2/docker-whisper
+# https://github.com/hwdsl2/scribecrate
 #
 # Copyright (C) 2026 Lin Song <linsongui@gmail.com>
 #
@@ -25,8 +25,8 @@ show_usage() {
   fi
   cat 1>&2 <<'EOF'
 
-Whisper Docker - Server Management
-https://github.com/hwdsl2/docker-whisper
+ScribeCrate - Server Management
+https://github.com/hwdsl2/scribecrate
 
 Usage: docker exec <container> whisper_manage [options]
 
@@ -111,7 +111,7 @@ load_config() {
 
 check_server() {
   if ! curl -sf "http://127.0.0.1:${WHISPER_PORT}/health" >/dev/null 2>&1; then
-    exiterr "Whisper server is not responding on port ${WHISPER_PORT}. Is the container fully started?"
+    exiterr "ScribeCrate server is not responding on port ${WHISPER_PORT}. Is the container fully started?"
   fi
 }
 
@@ -193,7 +193,7 @@ do_show_key() {
 
   echo
   echo "==========================================================="
-  echo " Whisper API key"
+  echo " ScribeCrate API key"
   echo "==========================================================="
   echo "${WHISPER_API_KEY}"
   echo "==========================================================="
@@ -221,7 +221,7 @@ do_get_key() {
 do_show_info() {
   echo
   echo "==========================================================="
-  echo " Whisper Speech-to-Text Server"
+  echo " ScribeCrate Transcription Server"
   echo "==========================================================="
   echo " Active model: $WHISPER_MODEL"
   echo " Endpoint:     http://${SERVER_ADDR}:${WHISPER_PORT}"

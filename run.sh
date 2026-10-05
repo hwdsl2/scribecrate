@@ -1,12 +1,12 @@
 #!/bin/bash
 #
-# Docker script to configure and start a Whisper speech-to-text server
+# Docker script to configure and start the ScribeCrate transcription server
 #
 # DO NOT RUN THIS SCRIPT ON YOUR PC OR MAC! THIS IS ONLY MEANT TO BE RUN
 # IN A CONTAINER!
 #
-# This file is part of Whisper Docker image, available at:
-# https://github.com/hwdsl2/docker-whisper
+# This file is part of the ScribeCrate Docker image, available at:
+# https://github.com/hwdsl2/scribecrate
 #
 # Copyright (C) 2026 Lin Song <linsongui@gmail.com>
 #
@@ -329,7 +329,7 @@ printf '%s' "$WHISPER_MODEL" > /var/lib/whisper/.model
 printf '%s' "$server_addr"   > /var/lib/whisper/.server_addr
 
 echo
-echo "Whisper Docker - https://github.com/hwdsl2/docker-whisper"
+echo "ScribeCrate - https://github.com/hwdsl2/scribecrate"
 
 if ! grep -q " /var/lib/whisper " /proc/mounts 2>/dev/null; then
   echo
@@ -342,13 +342,13 @@ if ! grep -q " /var/lib/whisper " /proc/mounts 2>/dev/null; then
   fi
 elif [ -z "$WHISPER_API_KEY" ] && [ -z "$WHISPER_API_KEY_WAS_SET" ] && $data_existing; then
   echo
-  echo "Warning: Existing Whisper data was found but no API key is configured."
+  echo "Warning: Existing ScribeCrate data was found but no API key is configured."
   echo "         Preserving no-auth behavior for backward compatibility."
   echo "         Set WHISPER_API_KEY to enable authentication."
 fi
 
 echo
-echo "Starting Whisper speech-to-text server..."
+echo "Starting ScribeCrate transcription server..."
 echo "  Model:    $WHISPER_MODEL"
 echo "  Device:   $WHISPER_DEVICE ($WHISPER_COMPUTE_TYPE)"
 echo "  Language: $WHISPER_LANGUAGE"
@@ -389,7 +389,7 @@ echo
 # received during the model-download startup phase is handled cleanly.
 cleanup() {
   echo
-  echo "Stopping Whisper server..."
+  echo "Stopping ScribeCrate server..."
   kill "${WHISPER_PID:-}" 2>/dev/null
   wait "${WHISPER_PID:-}" 2>/dev/null
   exit 0
@@ -420,9 +420,9 @@ wait_for_server() {
 
 if ! wait_for_server; then
   if ! kill -0 "$WHISPER_PID" 2>/dev/null; then
-    echo "Error: Whisper server failed to start. Check the container logs for details." >&2
+    echo "Error: ScribeCrate server failed to start. Check the container logs for details." >&2
   else
-    echo "Error: Whisper server did not become ready within 300 seconds." >&2
+    echo "Error: ScribeCrate server did not become ready within 300 seconds." >&2
     kill "$WHISPER_PID" 2>/dev/null
   fi
   exit 1
@@ -432,7 +432,7 @@ report_usage_counts
 
 echo
 echo "==========================================================="
-echo " Whisper speech-to-text server is ready"
+echo " ScribeCrate transcription server is ready"
 echo "==========================================================="
 echo " Model:    $WHISPER_MODEL"
 echo " Endpoint: http://${server_addr}:${WHISPER_PORT}"
@@ -440,17 +440,20 @@ echo "==========================================================="
 echo
 echo "Transcribe an audio file:"
 echo "  curl http://${server_addr}:${WHISPER_PORT}/v1/audio/transcriptions \\"
+if [ -n "$WHISPER_API_KEY" ]; then
+  echo "    -H \"Authorization: Bearer <api-key>\" \\"
+fi
 echo "    -F file=@audio.mp3 -F model=whisper-1"
 echo
 if [ -n "$WHISPER_API_KEY" ]; then
   echo "API key authentication is enabled."
-  echo "Include header:  -H \"Authorization: Bearer \$WHISPER_API_KEY\""
+  echo "Replace <api-key> with the key from: docker exec <container> whisper_manage --getkey"
   echo
 fi
 echo "Interactive API docs: http://${server_addr}:${WHISPER_PORT}/docs"
 echo
 echo "To set up HTTPS, see: Using a reverse proxy"
-echo "  https://github.com/hwdsl2/docker-whisper#using-a-reverse-proxy"
+echo "  https://github.com/hwdsl2/scribecrate#using-a-reverse-proxy"
 echo
 echo "Setup complete."
 echo
