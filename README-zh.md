@@ -6,25 +6,22 @@
 
 [![构建状态](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml/badge.svg)](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml) &nbsp;[![Docker Pulls](https://raw.githubusercontent.com/hwdsl2/badges/main/img/docker-pulls-whisper-server.svg)](https://hub.docker.com/r/hwdsl2/whisper-server) &nbsp;[![License: MIT](docs/images/license.svg)](https://opensource.org/licenses/MIT) &nbsp;[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://vpnsetup.net/whisper-notebook)
 
-在您自己的硬件上转录音频、生成字幕，并将语音翻译为英语。ScribeCrate 使用 [Whisper](https://github.com/openai/whisper) 模型，由 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) 驱动，提供兼容 OpenAI 的转录和翻译接口。可通过 Docker 部署，使用 CPU 或 NVIDIA GPU 运行。
+ScribeCrate 是一个自托管的语音转文字 API，用于转录音频、生成字幕，并将语音翻译为英语。它使用 [Whisper](https://github.com/openai/whisper) 模型，由 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) 驱动，提供兼容 OpenAI 的转录和翻译接口。可通过 Docker 部署，使用 CPU 或 NVIDIA GPU 运行。
 
 > 本项目原名 **docker-whisper**，仍由 [hwdsl2](https://github.com/hwdsl2) 维护。Docker 镜像名称保持为 `hwdsl2/whisper-server`；现有配置、API 接口和持久化数据继续兼容。
 
-## 功能特性
+**功能特性：**
 
 - **兼容 OpenAI 的 API：** 提供 `POST /v1/audio/transcriptions` 和 `POST /v1/audio/translations` 接口，可与支持 OpenAI Whisper API 的客户端集成。
-- **Whisper 模型支持：** 可选择 `tiny`、`base`、`small`、`medium`、`large-v3`、`large-v3-turbo` 等模型。
+- **私密的本地处理：** 音频保留在您的服务器上，不发送给第三方进行转录。
 - **说话人分离：** 通过可选的本地 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 扩展，识别每个片段中的说话人。
-- **模型管理：** 使用 `whisper_manage` 查看服务器设置和预先下载模型；通过 `WHISPER_MODEL` 切换模型。
-- **本地音频处理：** 音频保留在您的服务器上，不发送给第三方进行转录。
+- **流式结果：** 添加 `stream=true`，即可在解码时通过 Server-Sent Events（SSE）逐段接收转录结果，无需等待整个上传文件处理完成。
+- **Whisper 模型支持：** 可选择 `tiny`、`base`、`small`、`medium`、`large-v3`、`large-v3-turbo` 等模型。
+- **CPU 和 GPU 支持：** 可使用 CPU 运行，或使用 `:cuda` 镜像通过 NVIDIA GPU 加速推理。
 - **广泛的音频格式支持：** 支持 MP3、M4A、WAV、WebM、OGG、FLAC 及 FFmpeg 支持的其他音频格式。
 - **灵活的输出格式：** JSON、纯文本、详细 JSON、SRT 字幕和 WebVTT 字幕。
-- **流式结果：** 添加 `stream=true`，即可在解码时通过 Server-Sent Events（SSE）逐段接收转录结果，无需等待整个上传文件处理完成。
-- **GPU 加速：** 使用 `:cuda` 镜像通过 NVIDIA GPU 加速推理。CUDA 镜像支持 `linux/amd64`。
 - **离线运行：** 使用预先缓存的模型和 `WHISPER_LOCAL_ONLY`，无需访问互联网即可运行。
 - **自动构建：** 镜像通过 [GitHub Actions](https://github.com/hwdsl2/scribecrate/actions) 自动构建和发布，构建工作流公开可查。
-- **持久化模型缓存：** 通过 Docker 数据卷，在容器更新后继续使用已下载的模型。
-- **多架构支持：** CPU 镜像支持 `linux/amd64` 和 `linux/arm64`。
 
 也可作为 [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack/blob/main/README-zh.md) 的一部分使用，一条命令即可部署完整的自托管 AI 技术栈。
 
@@ -176,7 +173,7 @@ docker pull quay.io/hwdsl2/whisper-server
 docker image tag quay.io/hwdsl2/whisper-server hwdsl2/whisper-server
 ```
 
-支持平台：`linux/amd64` 和 `linux/arm64`。`:cuda` 标签仅支持 `linux/amd64`。
+CPU 镜像支持 `linux/amd64` 和 `linux/arm64`。`:cuda` 标签仅支持 `linux/amd64`。
 
 ## 环境变量
 

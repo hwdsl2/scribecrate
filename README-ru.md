@@ -6,25 +6,22 @@
 
 [![Статус сборки](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml/badge.svg)](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml) &nbsp;[![Docker Pulls](https://raw.githubusercontent.com/hwdsl2/badges/main/img/docker-pulls-whisper-server.svg)](https://hub.docker.com/r/hwdsl2/whisper-server) &nbsp;[![License: MIT](docs/images/license.svg)](https://opensource.org/licenses/MIT) &nbsp;[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://vpnsetup.net/whisper-notebook)
 
-Транскрибируйте аудио, создавайте субтитры и переводите речь на английский язык на собственном оборудовании. ScribeCrate предоставляет совместимые с OpenAI конечные точки транскрибации и перевода, используя модели [Whisper](https://github.com/openai/whisper) и движок [faster-whisper](https://github.com/SYSTRAN/faster-whisper). Разверните сервер с помощью Docker на CPU или NVIDIA GPU.
+ScribeCrate предоставляет API для преобразования речи в текст на собственном сервере, позволяющий транскрибировать аудио, создавать субтитры и переводить речь на английский язык. Сервер предоставляет совместимые с OpenAI конечные точки транскрибации и перевода, используя модели [Whisper](https://github.com/openai/whisper) и движок [faster-whisper](https://github.com/SYSTRAN/faster-whisper). Разверните сервер с помощью Docker на CPU или NVIDIA GPU.
 
 > Ранее проект назывался **docker-whisper**. Его по-прежнему поддерживает [hwdsl2](https://github.com/hwdsl2). Имя Docker-образа остаётся `hwdsl2/whisper-server`; существующие настройки, конечные точки API и постоянные данные сохраняют совместимость.
 
-## Возможности
+**Возможности:**
 
 - **Совместимый с OpenAI API:** конечные точки `POST /v1/audio/transcriptions` и `POST /v1/audio/translations` для интеграции с клиентами, поддерживающими OpenAI Whisper API.
-- **Поддержка моделей Whisper:** выбор моделей `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo` и других.
+- **Конфиденциальная локальная обработка:** аудио остаётся на вашем сервере и не отправляется третьим сторонам для транскрибации.
 - **Диаризация:** определение говорящего в каждом сегменте с помощью необязательного локального расширения [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx).
-- **Управление моделями:** просмотр настроек сервера и предварительная загрузка моделей с помощью `whisper_manage`; переключение моделей через `WHISPER_MODEL`.
-- **Локальная обработка аудио:** аудио остаётся на вашем сервере и не отправляется третьим сторонам для транскрибации.
+- **Потоковая выдача результатов:** добавьте `stream=true`, чтобы получать сегменты транскрипции через Server-Sent Events по мере декодирования, не дожидаясь завершения обработки всего загруженного файла.
+- **Поддержка моделей Whisper:** выбор моделей `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo` и других.
+- **Поддержка CPU и GPU:** запускайте сервер на CPU или ускоряйте обработку с помощью GPU NVIDIA и образа `:cuda`.
 - **Широкая поддержка аудиоформатов:** MP3, M4A, WAV, WebM, OGG, FLAC и другие аудиоформаты, поддерживаемые FFmpeg.
 - **Гибкие форматы вывода:** JSON, обычный текст, подробный JSON, субтитры SRT и WebVTT.
-- **Потоковая выдача результатов:** добавьте `stream=true`, чтобы получать сегменты транскрипции через Server-Sent Events по мере декодирования, не дожидаясь завершения обработки всего загруженного файла.
-- **Ускорение на GPU:** образ `:cuda` обеспечивает ускорение обработки с NVIDIA GPU. CUDA-образ поддерживает `linux/amd64`.
 - **Автономная работа:** запуск без доступа к интернету с предварительно кэшированными моделями и `WHISPER_LOCAL_ONLY`.
 - **Автоматическая сборка:** образы автоматически собираются и публикуются через [GitHub Actions](https://github.com/hwdsl2/scribecrate/actions); рабочие процессы сборки доступны публично.
-- **Постоянный кэш моделей:** том Docker позволяет повторно использовать загруженные модели после обновления контейнера.
-- **Несколько архитектур:** CPU-образы поддерживают `linux/amd64` и `linux/arm64`.
 
 Также доступен в составе [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack/blob/main/README-ru.md), который развёртывает полный AI-стек на собственном сервере одной командой.
 
@@ -176,7 +173,7 @@ docker pull quay.io/hwdsl2/whisper-server
 docker image tag quay.io/hwdsl2/whisper-server hwdsl2/whisper-server
 ```
 
-Поддерживаемые платформы: `linux/amd64` и `linux/arm64`. Тег `:cuda` поддерживает только `linux/amd64`.
+CPU-образы поддерживают `linux/amd64` и `linux/arm64`. Тег `:cuda` поддерживает только `linux/amd64`.
 
 ## Переменные окружения
 

@@ -6,25 +6,22 @@
 
 [![Build Status](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml/badge.svg)](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml) &nbsp;[![Docker Pulls](https://raw.githubusercontent.com/hwdsl2/badges/main/img/docker-pulls-whisper-server.svg)](https://hub.docker.com/r/hwdsl2/whisper-server) &nbsp;[![License: MIT](docs/images/license.svg)](https://opensource.org/licenses/MIT) &nbsp;[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://vpnsetup.net/whisper-notebook)
 
-Transcribe audio, generate subtitles, and translate speech into English on your own hardware. ScribeCrate provides OpenAI-compatible transcription and translation endpoints using [Whisper](https://github.com/openai/whisper) models, powered by [faster-whisper](https://github.com/SYSTRAN/faster-whisper). Deploy with Docker on CPU or an NVIDIA GPU.
+ScribeCrate is a self-hosted speech-to-text API for transcribing audio, generating subtitles, and translating speech into English. It provides OpenAI-compatible transcription and translation endpoints using [Whisper](https://github.com/openai/whisper) models, powered by [faster-whisper](https://github.com/SYSTRAN/faster-whisper). Deploy with Docker on CPU or an NVIDIA GPU.
 
 > Previously known as **docker-whisper**, maintained by [hwdsl2](https://github.com/hwdsl2). The Docker image remains `hwdsl2/whisper-server`; existing configuration, API endpoints, and persistent data remain compatible.
 
-## Features
+**Features:**
 
 - **OpenAI-compatible API:** `POST /v1/audio/transcriptions` and `POST /v1/audio/translations` endpoints for integration with clients that support the OpenAI Whisper API.
-- **Whisper model support:** choose from `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`, and more.
+- **Private, local processing:** audio stays on your server and is not sent to third parties for transcription.
 - **Speaker diarization:** identify who is speaking in each segment with the optional local [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) extension.
-- **Model management:** inspect server settings and pre-download models with `whisper_manage`; switch models using `WHISPER_MODEL`.
-- **Local audio processing:** audio stays on your server and is not sent to third parties for transcription.
+- **Streaming results:** add `stream=true` to receive transcription segments via Server-Sent Events as they are decoded, without waiting for the entire uploaded file to finish processing.
+- **Whisper model support:** choose from `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`, and more.
+- **CPU and GPU support:** run on CPU or accelerate inference with an NVIDIA GPU using the `:cuda` image.
 - **Broad audio format support:** MP3, M4A, WAV, WebM, OGG, FLAC, and other audio formats supported by FFmpeg.
 - **Flexible output:** JSON, plain text, verbose JSON, SRT subtitles, and WebVTT subtitles.
-- **Streaming results:** add `stream=true` to receive transcription segments via Server-Sent Events as they are decoded, without waiting for the entire uploaded file to finish processing.
-- **GPU acceleration:** use the `:cuda` image for faster inference with an NVIDIA GPU. The CUDA image supports `linux/amd64`.
 - **Offline operation:** run without internet access using pre-cached models and `WHISPER_LOCAL_ONLY`.
 - **Automated builds:** images are automatically built and published through [GitHub Actions](https://github.com/hwdsl2/scribecrate/actions), with publicly accessible build workflows.
-- **Persistent model cache:** reuse downloaded models across container updates with a Docker volume.
-- **Multiple architectures:** CPU images support `linux/amd64` and `linux/arm64`.
 
 Also available as part of the [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack), which deploys a complete self-hosted AI stack with a single command.
 
@@ -176,7 +173,7 @@ docker pull quay.io/hwdsl2/whisper-server
 docker image tag quay.io/hwdsl2/whisper-server hwdsl2/whisper-server
 ```
 
-Supported platforms: `linux/amd64` and `linux/arm64`. The `:cuda` tag supports `linux/amd64` only.
+CPU images support `linux/amd64` and `linux/arm64`. The `:cuda` tag supports `linux/amd64` only.
 
 ## Environment variables
 
