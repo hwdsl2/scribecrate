@@ -13,6 +13,7 @@ See: https://opensource.org/licenses/MIT
 """
 
 import asyncio
+import gc
 import json
 import logging
 import os
@@ -44,6 +45,11 @@ logger = logging.getLogger("whisper_server")
 
 _model = None       # WhisperModel instance
 _model_name = None  # name as loaded (e.g. "base")
+_model_config = None  # cached load config for lazy reloads
+_last_model_used_at = time.monotonic()
+_active_inferences = 0
+_idle_unload_seconds = 0
+_idle_monitor_task = None
 _beam_size = 5      # beam size used for transcription
 _max_request_beam = 10  # maximum per-request beam override; 0 disables the cap
 _word_timestamps = False  # default for word-level timestamps
@@ -118,7 +124,7 @@ def _load_diarizer() -> None:
 
 def _load_model() -> None:
     """Import and initialise the faster-whisper model from environment config."""
-    global _model, _model_name, _beam_size, _max_request_beam, _word_timestamps, _max_upload_bytes
+    global _model, _model_name, _model_config, _beam_size, _max_request_beam, _word_timestamps, _max_upload_bytes, _idle_unload_seconds
 
     from faster_whisper import WhisperModel  # deferred — keeps import fast
 
@@ -132,6 +138,7 @@ def _load_model() -> None:
     _max_request_beam = _env_int("WHISPER_MAX_REQUEST_BEAM", 10)
     _word_timestamps = os.environ.get("WHISPER_WORD_TIMESTAMPS", "").strip().lower() == "true"
     max_upload_mb    = _env_int("WHISPER_MAX_UPLOAD_MB", 1024)
+    _idle_unload_seconds = _env_int("WHISPER_IDLE_UNLOAD_SECONDS", 0)
     if _max_request_beam < 0:
         logger.error(
             "Invalid value for WHISPER_MAX_REQUEST_BEAM: %d (expected 0 or greater); using default 10",
@@ -146,28 +153,95 @@ def _load_model() -> None:
         max_upload_mb = 1024
     _max_upload_bytes = max_upload_mb * 1024 * 1024
 
+    _model_config = {
+        "model_name": model_name,
+        "device": device,
+        "compute_type": compute_type,
+        "threads": threads,
+        "cache_dir": cache_dir,
+        "local_files_only": local_files_only,
+    }
+    _load_model_from_config()
+
+
+def _load_model_from_config() -> None:
+    """Load the configured model if it is not currently resident."""
+    global _model, _model_name, _last_model_used_at
+    if _model is not None:
+        return
+    if not _model_config:
+        _load_model()
+        return
+    from faster_whisper import WhisperModel
+    cfg = _model_config
     logger.info(
-        "Loading model '%s' | device=%s compute_type=%s threads=%d beam=%d max_request_beam=%d word_ts=%s max_upload_mb=%d local_only=%s cache=%s",
-        model_name, device, compute_type, threads, _beam_size, _max_request_beam, _word_timestamps, max_upload_mb, local_files_only, cache_dir,
+        "Loading model '%s' | device=%s compute_type=%s threads=%d local_only=%s cache=%s",
+        cfg["model_name"], cfg["device"], cfg["compute_type"], cfg["threads"], cfg["local_files_only"], cfg["cache_dir"],
     )
     t0 = time.monotonic()
     _model = WhisperModel(
-        model_name,
-        device=device,
-        compute_type=compute_type,
-        cpu_threads=threads,
-        download_root=cache_dir,
-        local_files_only=local_files_only,
+        cfg["model_name"],
+        device=cfg["device"],
+        compute_type=cfg["compute_type"],
+        cpu_threads=cfg["threads"],
+        download_root=cfg["cache_dir"],
+        local_files_only=cfg["local_files_only"],
     )
-    _model_name = model_name
-    logger.info("Model '%s' ready in %.1fs", model_name, time.monotonic() - t0)
+    _model_name = cfg["model_name"]
+    _last_model_used_at = time.monotonic()
+    logger.info("Model '%s' ready in %.1fs", _model_name, time.monotonic() - t0)
+
+
+def _release_model(reason: str) -> None:
+    """Unload the resident model and ask CUDA-capable libraries to free caches."""
+    global _model
+    if _model is None:
+        return
+    logger.info("Unloading model '%s' (%s)", _model_name, reason)
+    _model = None
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("CUDA cache cleanup skipped: %s", exc)
+
+
+async def _idle_unload_monitor() -> None:
+    """Periodically unload the model after WHISPER_IDLE_UNLOAD_SECONDS."""
+    if _idle_unload_seconds <= 0:
+        return
+    logger.info("Idle model unload enabled after %ds", _idle_unload_seconds)
+    while True:
+        await asyncio.sleep(max(5, min(60, _idle_unload_seconds // 2 or 5)))
+        if _model is None or _active_inferences > 0:
+            continue
+        if time.monotonic() - _last_model_used_at < _idle_unload_seconds:
+            continue
+        if not _inference_lock.acquire(blocking=False):
+            continue
+        try:
+            if _active_inferences == 0 and _model is not None and time.monotonic() - _last_model_used_at >= _idle_unload_seconds:
+                _release_model(f"idle for {_idle_unload_seconds}s")
+        finally:
+            _inference_lock.release()
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    global _idle_monitor_task
     _load_model()
     _load_diarizer()
-    yield
+    if _idle_unload_seconds > 0:
+        _idle_monitor_task = asyncio.create_task(_idle_unload_monitor())
+    try:
+        yield
+    finally:
+        if _idle_monitor_task:
+            _idle_monitor_task.cancel()
+        with _inference_lock:
+            _release_model("shutdown")
 
 
 # ---------------------------------------------------------------------------
@@ -376,8 +450,11 @@ async def _stream_sse(
     seg_queue: asyncio.Queue = asyncio.Queue()
 
     def _run() -> None:
+        global _active_inferences, _last_model_used_at
         with _inference_lock:
+            _active_inferences += 1
             try:
+                _load_model_from_config()
                 segs_gen, _ = _model.transcribe(
                     tmp_path,
                     language=lang,
@@ -392,6 +469,8 @@ async def _stream_sse(
             except Exception as exc:  # noqa: BLE001
                 loop.call_soon_threadsafe(seg_queue.put_nowait, exc)
             finally:
+                _last_model_used_at = time.monotonic()
+                _active_inferences = max(0, _active_inferences - 1)
                 loop.call_soon_threadsafe(seg_queue.put_nowait, None)  # sentinel
 
     loop.run_in_executor(None, _run)
@@ -479,8 +558,8 @@ async def _handle_audio(
     Shared implementation for transcription and translation endpoints.
     ``task`` is either ``"transcribe"`` or ``"translate"``.
     """
-    if _model is None:
-        raise HTTPException(status_code=503, detail="Model is not loaded yet. Please retry.")
+    # Model may have been unloaded by the idle monitor; it is reloaded below
+    # under _inference_lock immediately before transcription.
 
     _validate_temperature(temperature)
     request_beam = _resolve_request_beam(beam)
@@ -588,17 +667,24 @@ async def _handle_audio(
     try:
         try:
             with _inference_lock:
-                segments_gen, info = _model.transcribe(
-                    tmp_path,
-                    language=lang,
-                    task=task,
-                    initial_prompt=prompt or None,
-                    temperature=temperature,
-                    beam_size=request_beam,
-                    word_timestamps=wt_flag,
-                    vad_filter=True,
-                )
-                segments = list(segments_gen)  # consume the generator before the temp file is removed
+                global _active_inferences, _last_model_used_at
+                _active_inferences += 1
+                try:
+                    _load_model_from_config()
+                    segments_gen, info = _model.transcribe(
+                        tmp_path,
+                        language=lang,
+                        task=task,
+                        initial_prompt=prompt or None,
+                        temperature=temperature,
+                        beam_size=request_beam,
+                        word_timestamps=wt_flag,
+                        vad_filter=True,
+                    )
+                    segments = list(segments_gen)  # consume the generator before the temp file is removed
+                finally:
+                    _last_model_used_at = time.monotonic()
+                    _active_inferences = max(0, _active_inferences - 1)
 
         except HTTPException:
             raise

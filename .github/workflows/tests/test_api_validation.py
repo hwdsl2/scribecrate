@@ -6,6 +6,7 @@ import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 
 
 class _HTTPException(Exception):
@@ -218,6 +219,20 @@ class _FakeModel:
         return iter([_FakeSegment()]), _FakeInfo()
 
 
+class _CapturedWhisperModel:
+    instances = []
+
+    def __init__(self, model_name, **kwargs):
+        self.model_name = model_name
+        self.kwargs = kwargs
+        self.calls = []
+        type(self).instances.append(self)
+
+    def transcribe(self, _path, **kwargs):
+        self.calls.append(kwargs)
+        return iter([_FakeSegment()]), _FakeInfo()
+
+
 class BeamPropagationTests(unittest.TestCase):
     def setUp(self):
         self.old_model = api_server._model
@@ -299,6 +314,135 @@ class BeamPropagationTests(unittest.TestCase):
 
         self.assertEqual(model.calls[0]["beam_size"], 9)
         self.assertTrue(any("transcript.text.done" in frame for frame in frames))
+
+
+class IdleUnloadFeatureTests(unittest.TestCase):
+    def setUp(self):
+        self.old_model = api_server._model
+        self.old_model_name = api_server._model_name
+        self.old_model_config = api_server._model_config
+        self.old_last_model_used_at = api_server._last_model_used_at
+        self.old_active_inferences = api_server._active_inferences
+        self.old_idle_unload_seconds = api_server._idle_unload_seconds
+        self.old_beam_size = api_server._beam_size
+        self.old_max_request_beam = api_server._max_request_beam
+        self.old_word_timestamps = api_server._word_timestamps
+        self.old_max_upload_bytes = api_server._max_upload_bytes
+        self.old_diarization_enabled = api_server._diarization_enabled
+
+    def tearDown(self):
+        api_server._model = self.old_model
+        api_server._model_name = self.old_model_name
+        api_server._model_config = self.old_model_config
+        api_server._last_model_used_at = self.old_last_model_used_at
+        api_server._active_inferences = self.old_active_inferences
+        api_server._idle_unload_seconds = self.old_idle_unload_seconds
+        api_server._beam_size = self.old_beam_size
+        api_server._max_request_beam = self.old_max_request_beam
+        api_server._word_timestamps = self.old_word_timestamps
+        api_server._max_upload_bytes = self.old_max_upload_bytes
+        api_server._diarization_enabled = self.old_diarization_enabled
+
+    def test_load_model_reads_idle_unload_seconds_and_caches_config(self):
+        env = {
+            "WHISPER_MODEL": "medium",
+            "WHISPER_DEVICE": "cuda",
+            "WHISPER_COMPUTE_TYPE": "float16",
+            "WHISPER_THREADS": "6",
+            "HF_HOME": "/cache/whisper",
+            "WHISPER_LOCAL_ONLY": "1",
+            "WHISPER_BEAM": "8",
+            "WHISPER_MAX_REQUEST_BEAM": "12",
+            "WHISPER_WORD_TIMESTAMPS": "true",
+            "WHISPER_MAX_UPLOAD_MB": "256",
+            "WHISPER_IDLE_UNLOAD_SECONDS": "900",
+        }
+        fake_fw = types.ModuleType("faster_whisper")
+        fake_fw.WhisperModel = _CapturedWhisperModel
+
+        with mock.patch.dict(sys.modules, {"faster_whisper": fake_fw}):
+            with mock.patch.object(api_server, "_load_model_from_config", autospec=True) as load_config:
+                with mock.patch.dict(os.environ, env, clear=False):
+                    api_server._load_model()
+
+        load_config.assert_called_once_with()
+        self.assertEqual(api_server._idle_unload_seconds, 900)
+        self.assertEqual(api_server._beam_size, 8)
+        self.assertEqual(api_server._max_request_beam, 12)
+        self.assertTrue(api_server._word_timestamps)
+        self.assertEqual(api_server._max_upload_bytes, 256 * 1024 * 1024)
+        self.assertEqual(
+            api_server._model_config,
+            {
+                "model_name": "medium",
+                "device": "cuda",
+                "compute_type": "float16",
+                "threads": 6,
+                "cache_dir": "/cache/whisper",
+                "local_files_only": True,
+            },
+        )
+
+    def test_idle_unload_recovers_on_next_request(self):
+        fake_fw = types.ModuleType("faster_whisper")
+        fake_fw.WhisperModel = _CapturedWhisperModel
+        _CapturedWhisperModel.instances.clear()
+
+        api_server._model = None
+        api_server._model_name = None
+        api_server._model_config = {
+            "model_name": "base",
+            "device": "cpu",
+            "compute_type": "int8",
+            "threads": 2,
+            "cache_dir": "/cache/whisper",
+            "local_files_only": False,
+        }
+        api_server._last_model_used_at = 0
+        api_server._active_inferences = 0
+        api_server._beam_size = 5
+        api_server._max_request_beam = 10
+        api_server._word_timestamps = False
+
+        with mock.patch.dict(sys.modules, {"faster_whisper": fake_fw}):
+            response = asyncio.run(api_server._handle_audio(
+                task="transcribe",
+                file=_FakeUpload(),
+                model="whisper-1",
+                language=None,
+                prompt=None,
+                response_format="json",
+                temperature=0,
+                stream=None,
+                beam=None,
+            ))
+
+        self.assertEqual(response.content, {"text": "hello"})
+        self.assertEqual(len(_CapturedWhisperModel.instances), 1)
+        instance = _CapturedWhisperModel.instances[0]
+        self.assertEqual(instance.model_name, "base")
+        self.assertEqual(instance.kwargs["download_root"], "/cache/whisper")
+        self.assertIs(api_server._model, instance)
+        self.assertEqual(api_server._model_name, "base")
+        self.assertGreater(api_server._last_model_used_at, 0)
+        self.assertEqual(instance.calls[0]["beam_size"], 5)
+
+    def test_release_model_clears_cached_model_and_cuda_cache(self):
+        empty_cache_calls = []
+        fake_torch = types.ModuleType("torch")
+        fake_torch.cuda = types.SimpleNamespace(
+            is_available=lambda: True,
+            empty_cache=lambda: empty_cache_calls.append(True),
+        )
+
+        api_server._model = object()
+        api_server._model_name = "base"
+
+        with mock.patch.dict(sys.modules, {"torch": fake_torch}):
+            api_server._release_model("idle for 600s")
+
+        self.assertIsNone(api_server._model)
+        self.assertTrue(empty_cache_calls)
 
 
 if __name__ == "__main__":
