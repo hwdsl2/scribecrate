@@ -4,7 +4,7 @@
 
 **Open-source, self-hosted transcription API.**
 
-[![Build Status](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml/badge.svg)](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml) &nbsp;[![Docker Pulls](https://raw.githubusercontent.com/hwdsl2/badges/main/img/docker-pulls-whisper-server.svg)](https://hub.docker.com/r/hwdsl2/whisper-server) &nbsp;[![License: MIT](docs/images/license.svg)](https://opensource.org/licenses/MIT) &nbsp;[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://vpnsetup.net/whisper-notebook)
+[![Build Status](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml/badge.svg)](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml) &nbsp;[![Docker Pulls](https://raw.githubusercontent.com/hwdsl2/badges/main/img/docker-pulls-whisper-server.svg)](https://hub.docker.com/r/hwdsl2/whisper-server) &nbsp;[![License: MIT](docs/images/license.svg)](https://opensource.org/licenses/MIT) &nbsp;[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://selfhostedaistack.com/scribecrate-notebook)
 
 ScribeCrate is a self-hosted speech-to-text API for transcribing audio, generating subtitles, and translating speech into English. It provides OpenAI-compatible transcription and translation endpoints using [Whisper](https://github.com/openai/whisper) models, powered by [faster-whisper](https://github.com/SYSTRAN/faster-whisper). Deploy with Docker on CPU or an NVIDIA GPU.
 
@@ -29,8 +29,8 @@ Also available as part of the [Self-Hosted AI Stack](https://github.com/hwdsl2/s
 
 **Also available:**
 
-- Try it online: [Open in Colab](https://vpnsetup.net/whisper-notebook) — no Docker or installation required
-- Related AI services: [WhisperLive](https://github.com/hwdsl2/docker-whisper-live), [Kokoro](https://github.com/hwdsl2/docker-kokoro), [Embeddings](https://github.com/hwdsl2/docker-embeddings), [LiteLLM](https://github.com/hwdsl2/docker-litellm), [Ollama](https://github.com/hwdsl2/docker-ollama), [Docling](https://github.com/hwdsl2/docker-docling), [MCP Gateway](https://github.com/hwdsl2/docker-mcp-gateway)
+- Try it online: [Open in Colab](https://selfhostedaistack.com/scribecrate-notebook) — no Docker or installation required
+- Related AI services: [ScribeCrate Live](https://github.com/hwdsl2/scribecrate-live), [SpeakCrate](https://github.com/hwdsl2/speakcrate), [Embeddings](https://github.com/hwdsl2/docker-embeddings), [LiteLLM](https://github.com/hwdsl2/docker-litellm), [Ollama](https://github.com/hwdsl2/docker-ollama), [ParseCrate](https://github.com/hwdsl2/parsecrate), [MCP Gateway](https://github.com/hwdsl2/docker-mcp-gateway)
 
 ## Quick start
 
@@ -109,13 +109,15 @@ curl http://your_server_ip:9000/v1/audio/transcriptions \
 
 Alternatively, you may [set up Whisper without Docker](https://github.com/hwdsl2/whisper-install). To learn more about how to use this image, read the sections below.
 
-## ScribeCrate vs. WhisperLive
+## ScribeCrate vs. ScribeCrate Live
 
-| | **ScribeCrate** | [WhisperLive](https://github.com/hwdsl2/docker-whisper-live) |
+ScribeCrate Live is a separately deployed server powered by [WhisperLive](https://github.com/collabora/WhisperLive).
+
+| | **ScribeCrate** | [ScribeCrate Live](https://github.com/hwdsl2/scribecrate-live) |
 |---|---|---|
 | **Use case** | Transcribe complete audio files | Live microphone / real-time audio streaming |
 | **Protocol** | HTTP REST | WebSocket (streaming) + HTTP REST |
-| **Latency** | JSON after processing; segments via SSE | Near-real-time, word by word |
+| **Latency** | JSON after processing; segments via SSE | Progressive segment updates |
 | **Best for** | Meeting recordings, uploaded audio | Browser capture, RTSP streams, live captions |
 | **Image size** | ~190 MB (~3.1 GB for `:cuda`) | ~750 MB (~4.5 GB for `:cuda`) |
 
@@ -685,7 +687,7 @@ Your downloaded models are preserved in the `whisper-data` volume.
 
 ScribeCrate can be used as the speech-to-text service in a broader self-hosted AI setup.
 
-For full and lightweight Docker Compose stacks, manual `docker run` examples, and voice/RAG/MCP pipeline examples with Kokoro, Embeddings, LiteLLM, Ollama, Docling, and MCP Gateway, see [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack).
+For full and lightweight Docker Compose stacks, manual `docker run` examples, and voice/RAG/MCP pipeline examples with SpeakCrate, Embeddings, LiteLLM, Ollama, ParseCrate, and MCP Gateway, see [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack).
 
 ## Speaker diarization
 

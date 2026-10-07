@@ -4,7 +4,7 @@
 
 **开源、自托管的音频转录 API。**
 
-[![构建状态](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml/badge.svg)](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml) &nbsp;[![Docker Pulls](https://raw.githubusercontent.com/hwdsl2/badges/main/img/docker-pulls-whisper-server.svg)](https://hub.docker.com/r/hwdsl2/whisper-server) &nbsp;[![License: MIT](docs/images/license.svg)](https://opensource.org/licenses/MIT) &nbsp;[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://vpnsetup.net/whisper-notebook)
+[![构建状态](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml/badge.svg)](https://github.com/hwdsl2/scribecrate/actions/workflows/main.yml) &nbsp;[![Docker Pulls](https://raw.githubusercontent.com/hwdsl2/badges/main/img/docker-pulls-whisper-server.svg)](https://hub.docker.com/r/hwdsl2/whisper-server) &nbsp;[![License: MIT](docs/images/license.svg)](https://opensource.org/licenses/MIT) &nbsp;[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://selfhostedaistack.com/scribecrate-notebook)
 
 ScribeCrate 是一个自托管的语音转文字 API，用于转录音频、生成字幕，并将语音翻译为英语。它使用 [Whisper](https://github.com/openai/whisper) 模型，由 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) 驱动，提供兼容 OpenAI 的转录和翻译接口。可通过 Docker 部署，使用 CPU 或 NVIDIA GPU 运行。
 
@@ -29,8 +29,8 @@ ScribeCrate 是一个自托管的语音转文字 API，用于转录音频、生�
 
 **另提供：**
 
-- 在线试用：[在 Colab 中打开](https://vpnsetup.net/whisper-notebook)——无需 Docker 或安装
-- 相关 AI 服务：[WhisperLive](https://github.com/hwdsl2/docker-whisper-live/blob/main/README-zh.md)、[Kokoro](https://github.com/hwdsl2/docker-kokoro/blob/main/README-zh.md)、[Embeddings](https://github.com/hwdsl2/docker-embeddings/blob/main/README-zh.md)、[LiteLLM](https://github.com/hwdsl2/docker-litellm/blob/main/README-zh.md)、[Ollama](https://github.com/hwdsl2/docker-ollama/blob/main/README-zh.md)、[Docling](https://github.com/hwdsl2/docker-docling/blob/main/README-zh.md)、[MCP Gateway](https://github.com/hwdsl2/docker-mcp-gateway/blob/main/README-zh.md)
+- 在线试用：[在 Colab 中打开](https://selfhostedaistack.com/scribecrate-notebook)——无需 Docker 或安装
+- 相关 AI 服务：[ScribeCrate Live](https://github.com/hwdsl2/scribecrate-live/blob/main/README-zh.md)、[SpeakCrate](https://github.com/hwdsl2/speakcrate/blob/main/README-zh.md)、[Embeddings](https://github.com/hwdsl2/docker-embeddings/blob/main/README-zh.md)、[LiteLLM](https://github.com/hwdsl2/docker-litellm/blob/main/README-zh.md)、[Ollama](https://github.com/hwdsl2/docker-ollama/blob/main/README-zh.md)、[ParseCrate](https://github.com/hwdsl2/parsecrate/blob/main/README-zh.md)、[MCP Gateway](https://github.com/hwdsl2/docker-mcp-gateway/blob/main/README-zh.md)
 
 ## 快速开始
 
@@ -109,13 +109,15 @@ curl http://您的服务器IP:9000/v1/audio/transcriptions \
 
 另外，你也可以在不使用 Docker 的情况下[安装 Whisper](https://github.com/hwdsl2/whisper-install/blob/main/README-zh.md)。如需了解更多关于此镜像的使用方法，请阅读以下各节。
 
-## ScribeCrate 与 WhisperLive 的选择
+## ScribeCrate 与 ScribeCrate Live 的选择
 
-| | **ScribeCrate** | [WhisperLive](https://github.com/hwdsl2/docker-whisper-live/blob/main/README-zh.md) |
+ScribeCrate Live 是独立部署的服务器，由 [WhisperLive](https://github.com/collabora/WhisperLive) 提供支持。
+
+| | **ScribeCrate** | [ScribeCrate Live](https://github.com/hwdsl2/scribecrate-live/blob/main/README-zh.md) |
 |---|---|---|
 | **使用场景** | 转录完整音频文件 | 实时麦克风/音频流 |
 | **协议** | HTTP REST | WebSocket（流式）+ HTTP REST |
-| **延迟** | 处理完成后返回 JSON；SSE 逐段返回 | 近实时，逐词输出 |
+| **延迟** | 处理完成后返回 JSON；SSE 逐段返回 | 逐步返回分段结果 |
 | **适合** | 会议录音、上传的音频文件 | 浏览器采集、RTSP 流、实时字幕 |
 | **镜像大小** | ~190 MB（`:cuda` 约 3.1 GB） | ~750 MB（`:cuda` 约 4.5 GB） |
 
@@ -685,7 +687,7 @@ docker rm -f whisper
 
 ScribeCrate 可作为更广泛的自托管 AI 设置中的语音转文字服务。
 
-如需完整和轻量级 Docker Compose 技术栈、手动 `docker run` 示例，以及结合 Kokoro、Embeddings、LiteLLM、Ollama、Docling 和 MCP Gateway 的语音/RAG/MCP 流水线示例，请参阅 [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack/blob/main/README-zh.md)。
+如需完整和轻量级 Docker Compose 技术栈、手动 `docker run` 示例，以及结合 SpeakCrate、Embeddings、LiteLLM、Ollama、ParseCrate 和 MCP Gateway 的语音/RAG/MCP 流水线示例，请参阅 [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack/blob/main/README-zh.md)。
 
 ## 说话人分离
 
