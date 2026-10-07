@@ -139,3 +139,120 @@ jobs:
           shred -u "${HOME}/.docker/config.json"
           rm -f "${HOME}/.docker/config.json"
           docker buildx rm "builder-cuda-${GITHUB_SHA::8}" || true
+
+  buildx-cuda-arm:
+    runs-on: ubuntu-24.04-arm
+    if: github.repository_owner == 'hwdsl2'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ runner.temp }}/.buildx-bin
+            ${{ runner.temp }}/.buildx-cache-cuda
+          key: ${{ secrets.CACHE_NAME }}-cuda-${{ github.sha }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ secrets.CACHE_NAME }}-cuda-
+      - name: Set up Buildx
+        env:
+          RUNNER_TEMP: ${{ runner.temp }}
+        run: |
+          [ ! -x /usr/bin/docker ] && exit 1
+          if [ ! -x /usr/bin/wget ] || [ ! -x /usr/bin/jq ]; then
+            export DEBIAN_FRONTEND=noninteractive
+            sudo apt-get -yq update
+            sudo apt-get -yq install wget jq
+          fi
+
+          BUILDX_VER=$(wget -t 3 -T 30 -qO- "https://api.github.com/repos/docker/buildx/releases/latest" | jq -r ".tag_name")
+          [ -z "${BUILDX_VER}" ] && exit 1
+          echo "Buildx version: ${BUILDX_VER}"
+
+          DOCKER_DIR="${HOME}/.docker/cli-plugins"
+          CACHE_DIR="${RUNNER_TEMP}/.buildx-bin"
+          mkdir -p "${DOCKER_DIR}"
+          if [ -s "${CACHE_DIR}/docker-buildx-${BUILDX_VER}" ]; then
+            echo "Using buildx binary from cache..."
+            cp -f "${CACHE_DIR}/docker-buildx-${BUILDX_VER}" "${DOCKER_DIR}/docker-buildx"
+          else
+            echo "Downloading buildx..."
+            BUILDX_URL="https://github.com/docker/buildx/releases/download/${BUILDX_VER}/buildx-${BUILDX_VER}.linux-arm64"
+            wget -t 3 -T 30 -nv -O "${DOCKER_DIR}/docker-buildx" "${BUILDX_URL}"
+            [ ! -s "${DOCKER_DIR}/docker-buildx" ] && exit 1
+            /bin/rm -rf "${CACHE_DIR}"
+            mkdir -p "${CACHE_DIR}"
+            /bin/cp -f "${DOCKER_DIR}/docker-buildx" "${CACHE_DIR}/docker-buildx-${BUILDX_VER}"
+          fi
+          chmod a+x "${DOCKER_DIR}/docker-buildx"
+
+          docker info
+          docker buildx version
+
+          docker buildx create --name "builder-cuda-${GITHUB_SHA::8}" --driver docker-container --use
+          docker buildx inspect --bootstrap
+      - name: Quay.io Login
+        env:
+          QUAY_USER: ${{ secrets.QUAY_USER }}
+          QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
+        run: echo "$QUAY_TOKEN" | docker login quay.io --username "$QUAY_USER" --password-stdin 2>&1
+      - name: Docker Hub Login
+        env:
+          DOCKER_USER: ${{ github.repository_owner }}
+          DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
+        run: echo "$DOCKER_TOKEN" | docker login --username "$DOCKER_USER" --password-stdin 2>&1
+      - name: Docker Buildx
+        env:
+          DOCKER_USER: ${{ github.repository_owner }}
+          BUILD_ONLY: ${{ secrets.BUILD_ONLY }}
+          RUNNER_TEMP: ${{ runner.temp }}
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          pwd
+          ls -ld Dockerfile.cuda
+
+          [ "$BUILD_ONLY" = "true" ] && BUILD_ONLY=""
+          ts_now=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          NO_CACHE_ARGS=()
+          if [ "${{ inputs.no_cache }}" = "true" ]; then
+            NO_CACHE_ARGS=(--no-cache)
+          fi
+
+          docker buildx build \
+            --progress plain \
+            --platform=linux/arm64 \
+            --build-arg "BUILD_DATE=$ts_now" \
+            --build-arg "VCS_REF=${GITHUB_SHA::8}" \
+            --build-arg "VERSION=cuda" \
+            "${NO_CACHE_ARGS[@]}" \
+            --cache-from type=local,src="${RUNNER_TEMP}/.buildx-cache-cuda" \
+            --cache-to type=local,dest="${RUNNER_TEMP}/.buildx-cache-cuda-new" \
+            -f Dockerfile.cuda \
+            -t "$DOCKER_USER/whisper-server:cuda" \
+            --pull \
+            ${BUILD_ONLY:+--push} \
+            .
+
+          docker buildx build \
+            --progress plain \
+            --platform=linux/arm64 \
+            --build-arg "BUILD_DATE=$ts_now" \
+            --build-arg "VCS_REF=${GITHUB_SHA::8}" \
+            --build-arg "VERSION=cuda" \
+            --cache-from type=local,src="${RUNNER_TEMP}/.buildx-cache-cuda-new" \
+            -f Dockerfile.cuda \
+            -t "quay.io/$DOCKER_USER/whisper-server:cuda" \
+            --pull \
+            ${BUILD_ONLY:+--push} \
+            .
+
+          /bin/rm -rf "${RUNNER_TEMP}/.buildx-cache-cuda"
+          /bin/mv -f "${RUNNER_TEMP}/.buildx-cache-cuda-new" "${RUNNER_TEMP}/.buildx-cache-cuda"
+      - name: Clear
+        if: always()
+        run: |
+          shred -u "${HOME}/.docker/config.json"
+          rm -f "${HOME}/.docker/config.json"
+          docker buildx rm "builder-cuda-${GITHUB_SHA::8}" || true
