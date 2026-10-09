@@ -8,7 +8,7 @@
 
 ScribeCrate предоставляет API для преобразования речи в текст на собственном сервере, позволяющий транскрибировать аудио, создавать субтитры и переводить речь на английский язык. Сервер предоставляет совместимые с OpenAI конечные точки транскрибации и перевода, используя модели [Whisper](https://github.com/openai/whisper) и движок [faster-whisper](https://github.com/SYSTRAN/faster-whisper). Разверните сервер с помощью Docker на CPU или NVIDIA GPU.
 
-> Ранее проект назывался **docker-whisper**. Его по-прежнему поддерживает [hwdsl2](https://github.com/hwdsl2). Имя Docker-образа остаётся `hwdsl2/whisper-server`; существующие настройки, конечные точки API и постоянные данные сохраняют совместимость.
+> Ранее проект назывался `docker-whisper`. Его поддерживает [hwdsl2](https://github.com/hwdsl2). Docker-образ остаётся `hwdsl2/whisper-server`.
 
 **Возможности:**
 

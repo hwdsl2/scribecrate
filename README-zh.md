@@ -8,7 +8,7 @@
 
 ScribeCrate 是一个自托管的语音转文字 API，用于转录音频、生成字幕，并将语音翻译为英语。它使用 [Whisper](https://github.com/openai/whisper) 模型，由 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) 驱动，提供兼容 OpenAI 的转录和翻译接口。可通过 Docker 部署，使用 CPU 或 NVIDIA GPU 运行。
 
-> 本项目原名 **docker-whisper**，仍由 [hwdsl2](https://github.com/hwdsl2) 维护。Docker 镜像名称保持为 `hwdsl2/whisper-server`；现有配置、API 接口和持久化数据继续兼容。
+> 本项目原名为 `docker-whisper`，由 [hwdsl2](https://github.com/hwdsl2) 维护。Docker 镜像仍为 `hwdsl2/whisper-server`。
 
 **功能特性：**
 

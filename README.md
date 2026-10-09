@@ -8,7 +8,7 @@
 
 ScribeCrate is a self-hosted speech-to-text API for transcribing audio, generating subtitles, and translating speech into English. It provides OpenAI-compatible transcription and translation endpoints using [Whisper](https://github.com/openai/whisper) models, powered by [faster-whisper](https://github.com/SYSTRAN/faster-whisper). Deploy with Docker on CPU or an NVIDIA GPU.
 
-> Previously known as **docker-whisper**, maintained by [hwdsl2](https://github.com/hwdsl2). The Docker image remains `hwdsl2/whisper-server`; existing configuration, API endpoints, and persistent data remain compatible.
+> Previously known as `docker-whisper`, maintained by [hwdsl2](https://github.com/hwdsl2). The Docker image remains `hwdsl2/whisper-server`.
 
 **Features:**
 
