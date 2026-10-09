@@ -78,14 +78,14 @@ docker logs whisper
 看到 "ScribeCrate transcription server is ready" 後，取得全新安裝在上述持久化資料卷中自動產生的 API 金鑰：
 
 ```bash
-scribecrate_api_key="$(docker exec whisper whisper_manage --getkey)"
+scribe_api_key="$(docker exec whisper whisper_manage --getkey)"
 ```
 
 轉錄您的第一個音訊檔案，將 `您的伺服器IP` 替換為伺服器位址，並將 `audio.mp3` 替換為您的音訊檔案：
 
 ```bash
 curl http://您的伺服器IP:9000/v1/audio/transcriptions \
-    -H "Authorization: Bearer $scribecrate_api_key" \
+    -H "Authorization: Bearer $scribe_api_key" \
     -F file=@audio.mp3 \
     -F model=whisper-1
 ```
@@ -102,7 +102,7 @@ curl -L -o sample_speech.wav \
     "https://github.com/Azure-Samples/cognitive-services-speech-sdk/raw/master/sampledata/audiofiles/katiesteve.wav"
 
 curl http://您的伺服器IP:9000/v1/audio/transcriptions \
-    -H "Authorization: Bearer $scribecrate_api_key" \
+    -H "Authorization: Bearer $scribe_api_key" \
     -F file=@sample_speech.wav \
     -F model=whisper-1
 ```
@@ -314,10 +314,10 @@ ScribeCrate 提供相容 OpenAI [音訊轉錄](https://developers.openai.com/api
 **身分驗證：** 全新的持久化安裝需要 API 金鑰。使用以下指令取得金鑰，供 SDK 設定和下面的 `curl` 範例使用：
 
 ```bash
-scribecrate_api_key="$(docker exec whisper whisper_manage --getkey)"
+scribe_api_key="$(docker exec whisper whisper_manage --getkey)"
 
 export OPENAI_BASE_URL="http://您的伺服器IP:9000/v1"
-export OPENAI_API_KEY="$scribecrate_api_key"
+export OPENAI_API_KEY="$scribe_api_key"
 ```
 
 如果已停用 API 金鑰驗證，請省略 curl 範例中的 `Authorization` 標頭。OpenAI SDK 用戶端仍要求提供非空金鑰；此時請設定 `OPENAI_API_KEY=unused`。
@@ -350,7 +350,7 @@ Content-Type: multipart/form-data
 
 ```bash
 curl http://您的伺服器IP:9000/v1/audio/transcriptions \
-    -H "Authorization: Bearer $scribecrate_api_key" \
+    -H "Authorization: Bearer $scribe_api_key" \
     -F file=@meeting.m4a \
     -F model=whisper-1 \
     -F language=zh
@@ -379,7 +379,7 @@ curl http://您的伺服器IP:9000/v1/audio/transcriptions \
 
 ```bash
 curl http://您的伺服器IP:9000/v1/audio/transcriptions \
-    -H "Authorization: Bearer $scribecrate_api_key" \
+    -H "Authorization: Bearer $scribe_api_key" \
     -F file=@long-audio.mp3 \
     -F model=whisper-1 \
     -F stream=true
@@ -442,7 +442,7 @@ while (true) {
 
 ```bash
 curl http://您的伺服器IP:9000/v1/audio/transcriptions \
-    -H "Authorization: Bearer $scribecrate_api_key" \
+    -H "Authorization: Bearer $scribe_api_key" \
     -F file=@video.mp4 \
     -F model=whisper-1 \
     -F response_format=srt
@@ -452,7 +452,7 @@ curl http://您的伺服器IP:9000/v1/audio/transcriptions \
 
 ```bash
 curl http://您的伺服器IP:9000/v1/audio/transcriptions \
-    -H "Authorization: Bearer $scribecrate_api_key" \
+    -H "Authorization: Bearer $scribe_api_key" \
     -F file=@audio.mp3 \
     -F model=whisper-1 \
     -F response_format=verbose_json
@@ -462,7 +462,7 @@ curl http://您的伺服器IP:9000/v1/audio/transcriptions \
 
 ```bash
 curl http://您的伺服器IP:9000/v1/audio/transcriptions \
-    -H "Authorization: Bearer $scribecrate_api_key" \
+    -H "Authorization: Bearer $scribe_api_key" \
     -F file=@audio.mp3 \
     -F model=whisper-1 \
     -F response_format=verbose_json \
@@ -495,7 +495,7 @@ Content-Type: multipart/form-data
 
 ```bash
 curl http://您的伺服器IP:9000/v1/audio/translations \
-    -H "Authorization: Bearer $scribecrate_api_key" \
+    -H "Authorization: Bearer $scribe_api_key" \
     -F file=@french_audio.mp3 \
     -F model=whisper-1
 ```
@@ -509,7 +509,7 @@ GET /v1/models
 以 OpenAI 相容格式回傳目前啟用的模型。
 
 ```bash
-curl http://您的伺服器IP:9000/v1/models -H "Authorization: Bearer $scribecrate_api_key"
+curl http://您的伺服器IP:9000/v1/models -H "Authorization: Bearer $scribe_api_key"
 ```
 
 ### 互動式 API 文件

@@ -78,14 +78,14 @@ docker logs whisper
 После появления сообщения "ScribeCrate transcription server is ready" получите API-ключ, автоматически созданный при новой установке с постоянным томом, указанным выше:
 
 ```bash
-scribecrate_api_key="$(docker exec whisper whisper_manage --getkey)"
+scribe_api_key="$(docker exec whisper whisper_manage --getkey)"
 ```
 
 Транскрибируйте первый аудиофайл, заменив `IP_вашего_сервера` адресом своего сервера, а `audio.mp3` своим аудиофайлом:
 
 ```bash
 curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
-    -H "Authorization: Bearer $scribecrate_api_key" \
+    -H "Authorization: Bearer $scribe_api_key" \
     -F file=@audio.mp3 \
     -F model=whisper-1
 ```
@@ -102,7 +102,7 @@ curl -L -o sample_speech.wav \
     "https://github.com/Azure-Samples/cognitive-services-speech-sdk/raw/master/sampledata/audiofiles/katiesteve.wav"
 
 curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
-    -H "Authorization: Bearer $scribecrate_api_key" \
+    -H "Authorization: Bearer $scribe_api_key" \
     -F file=@sample_speech.wav \
     -F model=whisper-1
 ```
@@ -314,10 +314,10 @@ ScribeCrate предоставляет конечные точки, совмес
 **Аутентификация:** Для новых установок с постоянным томом требуется API-ключ. Получите его для настройки SDK и примеров `curl` ниже:
 
 ```bash
-scribecrate_api_key="$(docker exec whisper whisper_manage --getkey)"
+scribe_api_key="$(docker exec whisper whisper_manage --getkey)"
 
 export OPENAI_BASE_URL="http://IP_вашего_сервера:9000/v1"
-export OPENAI_API_KEY="$scribecrate_api_key"
+export OPENAI_API_KEY="$scribe_api_key"
 ```
 
 Если аутентификация по API-ключу отключена, опустите заголовок `Authorization` в примерах curl. Клиентам OpenAI SDK по-прежнему нужен непустой ключ; в этом случае задайте `OPENAI_API_KEY=unused`.
@@ -350,7 +350,7 @@ Content-Type: multipart/form-data
 
 ```bash
 curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
-    -H "Authorization: Bearer $scribecrate_api_key" \
+    -H "Authorization: Bearer $scribe_api_key" \
     -F file=@meeting.m4a \
     -F model=whisper-1 \
     -F language=ru
@@ -379,7 +379,7 @@ curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
 
 ```bash
 curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
-    -H "Authorization: Bearer $scribecrate_api_key" \
+    -H "Authorization: Bearer $scribe_api_key" \
     -F file=@long-audio.mp3 \
     -F model=whisper-1 \
     -F stream=true
@@ -442,7 +442,7 @@ while (true) {
 
 ```bash
 curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
-    -H "Authorization: Bearer $scribecrate_api_key" \
+    -H "Authorization: Bearer $scribe_api_key" \
     -F file=@video.mp4 \
     -F model=whisper-1 \
     -F response_format=srt
@@ -452,7 +452,7 @@ curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
 
 ```bash
 curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
-    -H "Authorization: Bearer $scribecrate_api_key" \
+    -H "Authorization: Bearer $scribe_api_key" \
     -F file=@audio.mp3 \
     -F model=whisper-1 \
     -F response_format=verbose_json
@@ -462,7 +462,7 @@ curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
 
 ```bash
 curl http://IP_вашего_сервера:9000/v1/audio/transcriptions \
-    -H "Authorization: Bearer $scribecrate_api_key" \
+    -H "Authorization: Bearer $scribe_api_key" \
     -F file=@audio.mp3 \
     -F model=whisper-1 \
     -F response_format=verbose_json \
@@ -495,7 +495,7 @@ Content-Type: multipart/form-data
 
 ```bash
 curl http://IP_вашего_сервера:9000/v1/audio/translations \
-    -H "Authorization: Bearer $scribecrate_api_key" \
+    -H "Authorization: Bearer $scribe_api_key" \
     -F file=@french_audio.mp3 \
     -F model=whisper-1
 ```
@@ -509,7 +509,7 @@ GET /v1/models
 Возвращает активную модель в совместимом с OpenAI формате.
 
 ```bash
-curl http://IP_вашего_сервера:9000/v1/models -H "Authorization: Bearer $scribecrate_api_key"
+curl http://IP_вашего_сервера:9000/v1/models -H "Authorization: Bearer $scribe_api_key"
 ```
 
 ### Интерактивная документация API
