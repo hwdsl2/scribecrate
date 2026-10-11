@@ -64,6 +64,34 @@ docker run \
 
 </details>
 
+<details>
+<summary><strong>Build for AMD GPU (ROCm)</strong></summary>
+
+The ROCm image is built for one GPU ISA. Find yours with `rocminfo` (for
+example, `gfx1150`), then build the smallest image and run it on Linux:
+
+```bash
+docker build --build-arg ROCM_ARCH=gfx1150 -f Dockerfile.rocm -t whisper-rocm .
+docker run \
+    --name whisper \
+    --restart=always \
+    --device=/dev/kfd \
+    --device=/dev/dri \
+    --security-opt=seccomp=unconfined \
+    -e WHISPER_DEVICE=cuda \
+    -e WHISPER_COMPUTE_TYPE=float16 \
+    -v whisper-data:/var/lib/whisper \
+    -p 9000:9000 \
+    -d whisper-rocm
+```
+
+This default source build compiles rocRAND, rocSOLVER, and CTranslate2 for
+`ROCM_ARCH` and produces the smallest runtime. To trade image size for a faster
+build using upstream prebuilt libraries, add `--build-arg ROCM_BUILD=prebuilt`.
+The resulting image only runs on GPUs matching `ROCM_ARCH`.
+
+</details>
+
 **Important:** This image requires at least 700 MB of available RAM for the default `base` model. Systems with 512 MB or less of RAM are not supported.
 
 > [!NOTE]
@@ -151,6 +179,17 @@ ScribeCrate Live is a separately deployed server powered by [WhisperLive](https:
 - [NVIDIA driver](https://www.nvidia.com/en-us/drivers/) 575.57.08+ (Linux) or 576.57+ (Windows) installed on the host
 - [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) installed
 - The `:cuda` image supports `linux/amd64` only
+
+**For AMD GPU acceleration (locally built ROCm image):**
+
+- Linux `amd64` host with an AMD GPU supported by
+  [ROCm 7.2.1](https://rocm.docs.amd.com/projects/install-on-linux/en/docs-7.2.1/reference/system-requirements.html)
+  and a compatible AMD kernel-mode driver installed on the host
+- Docker Engine with access to the `/dev/kfd` and `/dev/dri` device nodes
+- The image must be built with `ROCM_ARCH` set to the GPU ISA reported by
+  `rocminfo` (for example, `gfx1150`); the resulting image only supports that ISA
+- `--device=/dev/kfd`, `--device=/dev/dri`, and
+  `--security-opt=seccomp=unconfined` when starting the container
 
 For internet-facing deployments, see [Using a reverse proxy](#using-a-reverse-proxy) to add HTTPS.
 
