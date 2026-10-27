@@ -502,7 +502,7 @@ Content-Type: multipart/form-data
 
 将任意语言的音频翻译为英文文本。与 [OpenAI 音频翻译接口](https://developers.openai.com/api/reference/resources/audio/subresources/translations/methods/create)兼容。接受常见的翻译参数。输出始终为英文。
 
-> **注意：** 仅英语（`.en`）模型不支持翻译。请使用多语言模型（如 `base`、`small`、`large-v3-turbo`）。
+> **注意：** 若要将语音翻译成英语，请使用 `base`、`small`、`medium` 或 `large-v3` 等非 turbo 多语言模型。仅支持英语的（`.en`）模型不支持此任务，`large-v3-turbo` / `turbo` 也未针对翻译任务训练。 当服务器加载上述不支持翻译的模型时，批处理和流式翻译请求均返回 HTTP 400。请求中的 `model` 字段不会覆盖服务器端的 `WHISPER_MODEL` 配置。
 
 **示例：**
 
@@ -602,10 +602,10 @@ docker exec whisper whisper_manage --downloadmodel large-v3-turbo
 | `large-v1` | ~3 GB | ~10 GB | 旧版大型模型 |
 | `large-v2` | ~3 GB | ~10 GB | 非常高精度 |
 | `large-v3` | ~3 GB | ~10 GB | 最高精度 |
-| `large-v3-turbo` | ~1.6 GB | ~6 GB | 高速 + 高精度 ⭐ |
-| `turbo` | ~1.6 GB | ~6 GB | `large-v3-turbo` 的别名 |
+| `large-v3-turbo` | ~1.6 GB | ~6 GB | 高速 + 高精度 ⭐；仅用于转录 |
+| `turbo` | ~1.6 GB | ~6 GB | `large-v3-turbo` 的别名；仅用于转录 |
 
-> **提示：** `large-v3-turbo` 的精度接近 `large-v3`，但资源消耗约为其一半。对于大多数生产部署，这是从 `base` 升级的推荐选择。
+> **提示：** 对于转录，在硬件资源充足时，`large-v3-turbo` 是比 `large-v3` 更快的选择。若要将语音翻译成英语，请选择 `base`、`small`、`medium` 或 `large-v3` 等非 turbo 多语言模型。
 
 内存数据为近似值，基于 INT8 量化（默认）。模型缓存在 `/var/lib/whisper` Docker 数据卷中，仅需下载一次。
 

@@ -2,6 +2,24 @@
 
 Notable changes to ScribeCrate are documented here.
 
+## 2026-10-27
+
+### Compatibility
+
+- `/v1/audio/translations` now returns HTTP 400 when the loaded model is
+  `large-v3-turbo` or `turbo`, for both batch and SSE requests. Previously,
+  requests were accepted even though turbo is not trained for translation.
+  Use a multilingual non-turbo model such as `base`, `small`, `medium`, or
+  `large-v3`: set server-side `WHISPER_MODEL`, then restart for a bind-mounted
+  env file or recreate the container for Docker/Compose environment changes.
+  The request's `model` field does not switch the loaded model. Turbo
+  transcription and the default `base` model are unchanged.
+
+### Fixed
+
+- Corrected translation model guidance in API errors, endpoint documentation,
+  READMEs, model-list help and configuration comments.
+
 ## 2026-10-24
 
 Release: `2026.10.1`
