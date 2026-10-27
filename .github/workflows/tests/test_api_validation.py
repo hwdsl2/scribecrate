@@ -6,6 +6,7 @@ import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 
 
 class _HTTPException(Exception):
@@ -299,6 +300,72 @@ class BeamPropagationTests(unittest.TestCase):
 
         self.assertEqual(model.calls[0]["beam_size"], 9)
         self.assertTrue(any("transcript.text.done" in frame for frame in frames))
+
+
+class _FakeInnerModel:
+    """Stand-in for the CTranslate2 engine: records unload_model() calls."""
+
+    def __init__(self):
+        self.unload_calls = 0
+
+    def unload_model(self):
+        self.unload_calls += 1
+
+
+class _FakeWhisperModel:
+    """Stand-in for faster_whisper.WhisperModel with a loaded CTranslate2 model."""
+
+    def __init__(self):
+        self.model = _FakeInnerModel()
+
+
+class GracefulShutdownReleaseTests(unittest.TestCase):
+    """The lifespan teardown must release the CTranslate2 CUDA context so a
+    stop never leaves an orphaned VRAM allocation on a shared GPU."""
+
+    def _run_shutdown(self, model):
+        def fake_load(*_args, **_kwargs):
+            return None
+
+        with mock.patch.object(api_server, "_load_decoding_options", fake_load), \
+             mock.patch.object(api_server, "_load_diarization_options", fake_load), \
+             mock.patch.object(api_server, "_load_model", fake_load), \
+             mock.patch.object(api_server, "_load_diarizer", fake_load):
+
+            async def run_lifespan():
+                async with api_server._lifespan(object()):
+                    pass
+
+            asyncio.run(run_lifespan())
+
+        return model
+
+    def test_shutdown_releases_loaded_model(self):
+        model = _FakeWhisperModel()
+        api_server._model = model
+        try:
+            self._run_shutdown(model)
+            self.assertEqual(model.model.unload_calls, 1)
+        finally:
+            api_server._model = None
+
+    def test_shutdown_is_a_noop_when_no_model(self):
+        api_server._model = None
+        self._run_shutdown(None)
+
+    def test_shutdown_swallows_unload_errors(self):
+        model = _FakeWhisperModel()
+
+        def boom():
+            raise RuntimeError("driver gone")
+
+        model.model.unload_model = boom
+        api_server._model = model
+        try:
+            # Must not raise: a failed release must not break the shutdown.
+            self._run_shutdown(model)
+        finally:
+            api_server._model = None
 
 
 if __name__ == "__main__":

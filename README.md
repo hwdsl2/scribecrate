@@ -60,9 +60,23 @@ docker run \
     -d hwdsl2/whisper-server:cuda
 ```
 
-**Requirements:** NVIDIA GPU, [NVIDIA driver](https://www.nvidia.com/en-us/drivers/) 575.57.08+ (Linux) or 576.57+ (Windows), and the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) installed on the host. The `:cuda` image is `linux/amd64` only.
+**Requirements:** NVIDIA GPU, [NVIDIA driver](https://www.nvidia.com/en-us/drivers/) 575.57.08+ (Linux) or 576.57+ (Windows), and the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest-install-guide.html) installed on the host. The `:cuda` image is `linux/amd64` only.
 
 </details>
+
+> [!NOTE]
+> **Stopping the container:** give the server time to release the model. On a GPU shared with other workloads, a stop that kills the server before it finishes (default `--stop-timeout` is 10 s) can leave the CUDA context orphaned, with the VRAM stuck on the card until the GPU is reset. Use `--stop-timeout 60` so the shutdown (model release) can complete, especially if a transcription may be running when you stop:
+>
+> ```bash
+> docker run \
+>     --name whisper \
+>     --restart=always \
+>     --stop-timeout 60 \
+>     --gpus=all \
+>     -v whisper-data:/var/lib/whisper \
+>     -p 9000:9000 \
+>     -d hwdsl2/whisper-server:cuda
+> ```
 
 **Important:** This image requires at least 700 MB of available RAM for the default `base` model. Systems with 512 MB or less of RAM are not supported.
 

@@ -252,6 +252,17 @@ async def _lifespan(app: FastAPI):
     _load_model()
     _load_diarizer()
     yield
+    # Graceful shutdown: release the CTranslate2 CUDA context so VRAM is
+    # returned to the driver. Without this, a stop/kill during transcription
+    # leaves an orphaned CUDA context (VRAM stuck on the host GPU, visible
+    # in nvidia-smi with no owning process).
+    # See: https://github.com/SYSTRAN/faster-whisper/issues/660
+    if _model is not None:
+        try:
+            _model.model.unload_model()
+            logger.info("Model released on shutdown (CUDA context freed)")
+        except Exception as exc:
+            logger.warning("Model release on shutdown failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------
