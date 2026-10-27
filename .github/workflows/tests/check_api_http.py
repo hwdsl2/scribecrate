@@ -10,6 +10,52 @@ from unittest import mock
 from fastapi.testclient import TestClient
 
 
+
+def check_translation_models(api, client, headers, calls, directory):
+    """Check real routing/status/content type with deterministic inference."""
+    description = api.app.openapi()["paths"]["/v1/audio/translations"]["post"]["description"]
+    assert "HTTP 400" in description and "large-v3-turbo" in description
+    for loaded in ("base.en", "small.en", "large-v3-turbo", "turbo",
+                   "tiny", "base", "small", "medium", "large-v3"):
+        with mock.patch.object(api, "_model_name", loaded):
+            unsupported = loaded.endswith(".en") or loaded in {"large-v3-turbo", "turbo"}
+            if unsupported:
+                for auth in ({}, {"Authorization": "Bearer wrong"}):
+                    response = client.post(
+                        "/v1/audio/translations", headers=auth,
+                        files={"file": ("audio.wav", b"fixture audio")},
+                        data={"model": "whisper-1", "stream": "true"},
+                    )
+                    assert response.status_code == 401
+            for endpoint, task in (("translations", "translate"), ("transcriptions", "transcribe")):
+                for stream in (False, True):
+                    # Request labels cannot bypass a blocked loaded model or block a valid one.
+                    for request_model in ("whisper-1", "small" if unsupported else "turbo"):
+                        before = len(calls)
+                        response = client.post(
+                            "/v1/audio/" + endpoint, headers=headers,
+                            files={"file": ("audio.wav", b"fixture audio", "audio/wav")},
+                            data={"model": request_model, "stream": str(stream).lower()},
+                        )
+                        if task == "translate" and unsupported:
+                            assert response.status_code == 400, response.text
+                            assert response.headers["content-type"].startswith("application/json")
+                            assert loaded in response.json()["detail"]
+                            assert "multilingual non-turbo" in response.json()["detail"]
+                            assert len(calls) == before, "Rejected request reached inference"
+                            assert "data:" not in response.text, "Rejected request began SSE"
+                        else:
+                            assert response.status_code == 200, response.text
+                            assert len(calls) == before + 1
+                            assert calls[-1]["task"] == task
+                            if stream:
+                                assert response.headers["content-type"].startswith("text/event-stream")
+                                assert "transcript.text.done" in response.text and "data: [DONE]" in response.text
+                            else:
+                                assert response.json() == {"text": "hello"}
+                        assert not list(Path(directory).iterdir()), "Upload files leaked"
+
+
 def check(source, baseline=None):
     spec = importlib.util.spec_from_file_location("checked_api", source)
     api = importlib.util.module_from_spec(spec)
@@ -80,6 +126,8 @@ def check(source, baseline=None):
                                         assert "data: [DONE]" in response.text
                                     else:
                                         assert response.json() == {"text": "hello"}
+                            if condition == "":
+                                check_translation_models(api, client, headers, calls, directory)
                             for response_format in ("text", "verbose_json", "srt", "vtt"):
                                 response = client.post(
                                     "/v1/audio/transcriptions", headers=headers,

@@ -83,3 +83,16 @@ inherits the file's `WHISPER_THREADS=2`. The CUDA startup checks explicit `1`.
   or audio binary is committed. Preserve the upstream license/attribution on
   redistribution. Clustering need not be perfect for the test to pass, but native
   turns and actual ASR speech segments must be nonempty.
+
+## Translation model compatibility
+
+`TranslationModelTests` checks that both turbo aliases and English-only models
+return HTTP 400 for batch/SSE translation before upload persistence or stream
+creation. It also checks multilingual translation, turbo transcription, source
+language forwarding, the loaded model versus request label, and unloaded-model
+503 behavior. These tests run in the existing dependency-free suite.
+
+`check_api_http.py` additionally checks real FastAPI routing, authentication,
+JSON HTTP 400 responses before SSE, continued successful requests, cleanup and
+the translation endpoint documentation. Inference remains a deterministic spy;
+these checks do not download models or measure translation quality.

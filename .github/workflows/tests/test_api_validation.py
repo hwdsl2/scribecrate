@@ -6,6 +6,7 @@ import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 
 
 class _HTTPException(Exception):
@@ -299,6 +300,108 @@ class BeamPropagationTests(unittest.TestCase):
 
         self.assertEqual(model.calls[0]["beam_size"], 9)
         self.assertTrue(any("transcript.text.done" in frame for frame in frames))
+
+
+
+class TranslationModelTests(unittest.TestCase):
+    def setUp(self):
+        self.patches = []
+        for name, value in (
+            ("_model", _FakeModel()), ("_model_name", "base"),
+            ("_beam_size", 5), ("_max_request_beam", 10),
+            ("_max_upload_bytes", 0),
+        ):
+            patch = mock.patch.object(api_server, name, value)
+            patch.start()
+            self.patches.append(patch)
+        if hasattr(api_server, "_diarization_enabled"):
+            patch = mock.patch.object(api_server, "_diarization_enabled", False)
+            patch.start()
+            self.patches.append(patch)
+        patch = mock.patch.dict(os.environ, {"WHISPER_LANGUAGE": "auto"})
+        patch.start()
+        self.patches.append(patch)
+
+    def tearDown(self):
+        for patch in reversed(self.patches):
+            patch.stop()
+
+    async def _request(self, task, stream, request_model="whisper-1", upload=None):
+        response = await api_server._handle_audio(
+            task=task,
+            file=upload if upload is not None else _FakeUpload(),
+            model=request_model,
+            language="es",
+            prompt=None,
+            response_format="json",
+            temperature=0,
+            stream=stream,
+            beam=None,
+        )
+        if stream:
+            frames = [frame async for frame in response.body_iterator]
+            self.assertTrue(any("transcript.text.done" in frame for frame in frames))
+            self.assertTrue(any("data: [DONE]" in frame for frame in frames))
+        else:
+            self.assertEqual(response.content, {"text": "hello"})
+        return response
+
+    def test_rejects_unsupported_loaded_models_before_upload_or_stream(self):
+        for loaded in ("base.en", "small.en", "large-v3-turbo", "turbo"):
+            for stream in (None, "true"):
+                for request_model in ("whisper-1", "small"):
+                    with self.subTest(loaded=loaded, stream=stream, request_model=request_model):
+                        api_server._model_name = loaded
+                        api_server._model = _FakeModel()
+                        upload = _FakeUpload()
+                        with mock.patch.object(upload, "read", wraps=upload.read) as read:
+                            with mock.patch.object(api_server.tempfile, "NamedTemporaryFile") as temp:
+                                with mock.patch.object(api_server, "_stream_sse") as sse:
+                                    with self.assertRaises(api_server.HTTPException) as caught:
+                                        asyncio.run(self._request("translate", stream, request_model, upload))
+                                    self.assertEqual(caught.exception.status_code, 400)
+                                    self.assertIn(loaded, caught.exception.detail)
+                                    self.assertIn("multilingual non-turbo", caught.exception.detail)
+                                    self.assertIn("large-v3", caught.exception.detail)
+                                    read.assert_not_awaited()
+                                    temp.assert_not_called()
+                                    sse.assert_not_called()
+                        self.assertEqual(api_server._model.calls, [])
+
+    def test_multilingual_translation_remains_supported_in_batch_and_sse(self):
+        for loaded in ("tiny", "base", "small", "medium", "large-v3"):
+            for stream in (None, "true"):
+                with self.subTest(loaded=loaded, stream=stream):
+                    api_server._model_name = loaded
+                    api_server._model = _FakeModel()
+                    asyncio.run(self._request("translate", stream))
+                    self.assertEqual(len(api_server._model.calls), 1)
+                    self.assertEqual(api_server._model.calls[0]["task"], "translate")
+                    self.assertEqual(api_server._model.calls[0]["language"], "es")
+
+    def test_turbo_and_english_only_transcription_remain_supported(self):
+        for loaded in ("large-v3-turbo", "turbo", "base.en"):
+            for stream in (None, "true"):
+                with self.subTest(loaded=loaded, stream=stream):
+                    api_server._model_name = loaded
+                    api_server._model = _FakeModel()
+                    asyncio.run(self._request("transcribe", stream))
+                    self.assertEqual(api_server._model.calls[0]["task"], "transcribe")
+
+    def test_request_model_does_not_replace_supported_loaded_model(self):
+        for request_model in ("turbo", "large-v3-turbo", "base.en"):
+            for stream in (None, "true"):
+                with self.subTest(request_model=request_model, stream=stream):
+                    api_server._model = _FakeModel()
+                    asyncio.run(self._request("translate", stream, request_model))
+                    self.assertEqual(api_server._model.calls[0]["task"], "translate")
+
+    def test_unloaded_model_still_returns_503(self):
+        api_server._model = None
+        api_server._model_name = "turbo"
+        with self.assertRaises(api_server.HTTPException) as caught:
+            asyncio.run(self._request("translate", "true"))
+        self.assertEqual(caught.exception.status_code, 503)
 
 
 if __name__ == "__main__":
