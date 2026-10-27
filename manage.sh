@@ -268,13 +268,16 @@ Available Whisper models:
   large-v1          ~3 GB    ~10 GB         Older large model
   large-v2          ~3 GB    ~10 GB         Very high accuracy
   large-v3          ~3 GB    ~10 GB         Best accuracy (recommended for quality)
-  large-v3-turbo    ~1.6 GB  ~6 GB          Fast + high accuracy (best overall upgrade)
-  turbo             ~1.6 GB  ~6 GB          Alias for large-v3-turbo
+  large-v3-turbo    ~1.6 GB  ~6 GB          Fast + high accuracy; transcription only
+  turbo             ~1.6 GB  ~6 GB          Alias for large-v3-turbo; transcription only
 
 Notes:
   - English-only (.en) variants are slightly faster for English audio.
-  - large-v3-turbo (or: turbo) is recommended over large-v3 for most use
-    cases: comparable accuracy with significantly lower resource usage.
+  - For transcription, large-v3-turbo (or: turbo) is a faster alternative
+    to large-v3 on hardware with sufficient resources.
+  - For speech-to-English translation, use a multilingual non-turbo model
+    such as base, small, medium, or large-v3. English-only (.en) models do
+    not support translation; turbo models are not trained for it.
   - Most models are downloaded from HuggingFace (Systran/faster-whisper-*);
     large-v3-turbo/turbo use mobiuslabsgmbh/faster-whisper-large-v3-turbo.
     All are cached in the /var/lib/whisper Docker volume.

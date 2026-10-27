@@ -571,12 +571,20 @@ async def _handle_audio(
     _validate_temperature(temperature)
     request_beam = _resolve_request_beam(beam)
 
-    # Block translation on English-only models
+    # Validate the loaded model before saving uploads or starting an SSE response.
     if task == "translate" and _model_name and _model_name.endswith(".en"):
         raise HTTPException(
             status_code=400,
             detail=f"Translation is not supported with English-only model '{_model_name}'. "
-                   "Use a multilingual model (e.g. base, small, large-v3-turbo).",
+                   "Use a multilingual non-turbo model (e.g. base, small, medium, large-v3).",
+        )
+
+    if task == "translate" and _model_name in {"large-v3-turbo", "turbo"}:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Translation is not supported with turbo model '{_model_name}'. "
+                   "Turbo models are not trained for translation. "
+                   "Use a multilingual non-turbo model (e.g. base, small, medium, large-v3).",
         )
 
     # Normalise the stream form field: the string "true" (case-insensitive) enables streaming.
@@ -943,7 +951,9 @@ async def translate(
     Compatible with common OpenAI translation request fields. The output is
     always in English. language and stream are local extensions.
 
-    Not supported with English-only (.en) models — use a multilingual model.
+    Requires a multilingual non-turbo model. A loaded English-only (.en) model
+    or either turbo alias (large-v3-turbo, turbo) returns HTTP 400, including
+    when stream=true. The request's model field does not change the loaded model.
 
     Supported audio formats: mp3, mp4, mpeg, mpga, m4a, wav, webm, ogg, flac
     (all formats supported by ffmpeg).
