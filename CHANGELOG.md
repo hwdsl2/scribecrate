@@ -4,6 +4,8 @@ Notable changes to ScribeCrate are documented here.
 
 ## 2026-10-27
 
+Release: `2026.10.2`
+
 ### Compatibility
 
 - `/v1/audio/translations` now returns HTTP 400 when the loaded model is
@@ -14,6 +16,11 @@ Notable changes to ScribeCrate are documented here.
   env file or recreate the container for Docker/Compose environment changes.
   The request's `model` field does not switch the loaded model. Turbo
   transcription and the default `base` model are unchanged.
+
+### Changed
+
+- The Colab demo now defaults to the multilingual `small` model and clarifies
+  model-selection guidance. The Docker default remains `base`.
 
 ### Fixed
 
