@@ -27,10 +27,13 @@ Also available as part of the [Self-Hosted AI Stack](https://github.com/hwdsl2/s
 
 > 📘 [The Self-Hosted AI Builder’s Guide](https://books2read.com/aiguide?store=amazon) is a practical guide to building, securing, and operating your own private AI stack.
 
-**Also available:**
+**Try it online:** [Open in Colab](https://selfhostedaistack.com/scribecrate-notebook) (no Docker or local installation required)
 
-- Try it online: [Open in Colab](https://selfhostedaistack.com/scribecrate-notebook) — no Docker or local installation required
-- Related AI services: [ScribeCrate Live](https://github.com/hwdsl2/scribecrate-live), [SpeakCrate](https://github.com/hwdsl2/speakcrate), [EmbedCrate](https://github.com/hwdsl2/embedcrate), [GatewayCrate](https://github.com/hwdsl2/gatewaycrate), [InferCrate](https://github.com/hwdsl2/infercrate), [ParseCrate](https://github.com/hwdsl2/parsecrate), [UplinkCrate](https://github.com/hwdsl2/uplinkcrate)
+**Related AI services:**
+
+- **Voice:** [ScribeCrate Live](https://github.com/hwdsl2/scribecrate-live), [SpeakCrate](https://github.com/hwdsl2/speakcrate)
+- **Documents & search:** [ParseCrate](https://github.com/hwdsl2/parsecrate), [EmbedCrate](https://github.com/hwdsl2/embedcrate)
+- **Models & gateways:** [InferCrate](https://github.com/hwdsl2/infercrate), [GatewayCrate](https://github.com/hwdsl2/gatewaycrate), [UplinkCrate](https://github.com/hwdsl2/uplinkcrate)
 
 ## Quick start
 
