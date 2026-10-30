@@ -204,6 +204,7 @@ This Docker image uses the following variables, that can be declared in an `env`
 | `WHISPER_LOCAL_ONLY` | When set to any non-empty value (e.g. `true`), disables all HuggingFace model downloads. For offline or air-gapped deployments with pre-cached models. | *(not set)* |
 | `WHISPER_WORD_TIMESTAMPS` | When set to `true`, enables word-level timestamps globally for all requests. The `verbose_json` output will include a top-level `words` array with per-word timing and confidence. Can also be enabled per-request via `timestamp_granularities[]=word`. | *(not set)* |
 | `WHISPER_DIARIZATION` | Set to `true` to enable speaker diarization. Identifies who is speaking in each segment. Uses [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) with pyannote segmentation-3.0 ONNX models (~45 MB, auto-downloaded on first use). Not supported in streaming mode. | *(not set)* |
+| `WHISPER_DIARIZE_EMBEDDING_MODEL` | Speaker embedding model filename from the sherpa-onnx [speaker-recongition-models](https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models) release. The default is Mandarin-trained; for English, consider `wespeaker_en_voxceleb_resnet34_LM.onnx` or `nemo_en_titanet_large.onnx`. See [speaker embedding model](#speaker-diarization). | `3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx` |
 | `WHISPER_DIARIZE_NUM_SPEAKERS` | Exact number of speakers (if known). Improves clustering accuracy. Set to `-1` or leave unset for auto-detection. | `-1` |
 | `WHISPER_DIARIZE_THREADS` | CPU threads per segmentation/embedding model. Canonical decimal integer `1` through `2147483647`; unset/empty inherits `WHISPER_THREADS`. | `WHISPER_THREADS` |
 | `WHISPER_DIARIZE_THRESHOLD` | Clustering threshold for auto-detection. Lower = more speakers detected, higher = fewer. Ignored when exact speaker count is set. | `0.5` |
@@ -767,6 +768,17 @@ docker exec whisper whisper_manage --downloaddiarize
 `WHISPER_DIARIZE_THREADS` accepts surrounding ASCII whitespace and at most one matching pair of outer quotes, like the repetition controls. Use ASCII decimal digits from `1` through `2147483647`, without signs or leading zeros. Invalid nonempty values stop startup before model loading, even when diarization is disabled. This option alone does not enable diarization.
 
 This is not a process-wide thread limit. Other libraries and request workers can use additional threads, and more threads do not guarantee a speedup or identical output. Diarization remains CPU-based even with the `:cuda` image, and remains batch-only. Apply changes using the [environment-variable restart/recreation guidance](#environment-variables); keep model volumes when updating or rolling back.
+
+**Speaker embedding model:** The default embedding model, `3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx`, is trained on Mandarin speech. On English recordings it can split one speaker into several labels. Set `WHISPER_DIARIZE_EMBEDDING_MODEL` to use another model from the sherpa-onnx [speaker-recongition-models](https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models) release, for example:
+
+```bash
+# In your whisper.env:
+WHISPER_DIARIZE_EMBEDDING_MODEL=wespeaker_en_voxceleb_resnet34_LM.onnx
+```
+
+English-trained options include `wespeaker_en_voxceleb_resnet34_LM.onnx` (~27 MB) and `nemo_en_titanet_large.onnx` (~101 MB). No single model is best for every recording, so compare on your own audio. Use the exact, case-sensitive `.onnx` filename from the release. Unknown nonempty values stop startup before model loading, even when diarization is disabled. The value accepts surrounding ASCII whitespace and at most one matching pair of outer quotes.
+
+The selected model is downloaded on first use and cached in the `/var/lib/whisper` volume next to any previously used model. `whisper_manage --downloaddiarize` pre-downloads the model the container was started with. Clustering thresholds are model-specific: after switching, re-tune `WHISPER_DIARIZE_THRESHOLD` or set `WHISPER_DIARIZE_NUM_SPEAKERS`. Unset or empty keeps the default model, so existing caches and thresholds are unchanged.
 
 ## Usage counts
 

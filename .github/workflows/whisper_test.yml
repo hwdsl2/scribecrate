@@ -54,7 +54,7 @@ jobs:
           fi
           if [ "$TEST_ID" = "no-env" ]; then
             # Invalid values fail before creating state or downloading models.
-            for assignment in WHISPER_CONDITION_ON_PREVIOUS_TEXT=yes WHISPER_NO_REPEAT_NGRAM_SIZE=2147483648 WHISPER_DIARIZE_THREADS=0 WHISPER_DIARIZE_THREADS=2147483648; do
+            for assignment in WHISPER_CONDITION_ON_PREVIOUS_TEXT=yes WHISPER_NO_REPEAT_NGRAM_SIZE=2147483648 WHISPER_DIARIZE_THREADS=0 WHISPER_DIARIZE_THREADS=2147483648 WHISPER_DIARIZE_EMBEDDING_MODEL=unknown.onnx; do
               if timeout 30 docker run --name whisper-invalid \
                 -e WHISPER_DISABLE_USAGE_COUNTS=1 -e "$assignment" whisper-test; then
                 echo "Expected invalid configuration to fail"; exit 1

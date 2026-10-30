@@ -121,6 +121,7 @@ def check(args):
         config = native.call_args.args[0]
         assert config.segmentation.num_threads == api._diarize_threads
         assert config.embedding.num_threads == api._diarize_threads
+        assert Path(config.embedding.model).name == api._diarize_embedding_model
         assert diarizer.diarize(str(args.audio)), "Warm-up returned no native diarization turns"
         timings, cpu_seconds, all_turns = [], [], []
         for _ in range(args.runs):
@@ -142,6 +143,8 @@ def check(args):
             "turns": all_turns, "transcript": output,
             "speaker_counts": [len({turn[2] for turn in turns}) for turns in all_turns],
         })
+    # Inherited from WHISPER_DIARIZE_EMBEDDING_MODEL; the default when unset.
+    results["embedding_model"] = api._diarize_embedding_model
     for format_name in ("text", "srt", "vtt"):
         asyncio.run(request(api, args.audio, response_format=format_name))
 
@@ -173,7 +176,7 @@ def check(args):
     results["overlap_intervals"] = intervals
     results["model_sha256"] = {
         name: hashlib.sha256(path.read_bytes()).hexdigest()
-        for name in (diarizer._SEG_MODEL_REL, diarizer._EMB_MODEL_REL)
+        for name in (diarizer._SEG_MODEL_REL, api._diarize_embedding_model)
         for path in (args.cache / name,)
     }
     results["whisper_snapshot_ids"] = sorted(path.name for path in args.cache.glob(

@@ -104,6 +104,45 @@ configure_diarization_threads() {
   fi
   export WHISPER_DIARIZE_THREADS="$threads"
 }
+
+# Speaker embedding model filename from the sherpa-onnx speaker-recongition-models
+# release. Keep this list in sync with diarizer.py, api_server.py and manage.sh.
+DIARIZE_EMBEDDING_MODELS="\
+  3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx \
+  3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx \
+  3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx \
+  3dspeaker_speech_eres2net_base_200k_sv_zh-cn_16k-common.onnx \
+  3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx \
+  3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx \
+  3dspeaker_speech_eres2net_sv_en_voxceleb_16k.onnx \
+  3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx \
+  3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx \
+  nemo_en_speakerverification_speakernet.onnx \
+  nemo_en_titanet_large.onnx \
+  nemo_en_titanet_small.onnx \
+  wespeaker_en_voxceleb_CAM++.onnx \
+  wespeaker_en_voxceleb_CAM++_LM.onnx \
+  wespeaker_en_voxceleb_resnet152_LM.onnx \
+  wespeaker_en_voxceleb_resnet221_LM.onnx \
+  wespeaker_en_voxceleb_resnet293_LM.onnx \
+  wespeaker_en_voxceleb_resnet34.onnx \
+  wespeaker_en_voxceleb_resnet34_LM.onnx \
+  wespeaker_zh_cnceleb_resnet34.onnx \
+  wespeaker_zh_cnceleb_resnet34_LM.onnx"
+
+configure_diarization_embedding_model() {
+  local model candidate valid=""
+  model=$(normalize_decoding_option "${WHISPER_DIARIZE_EMBEDDING_MODEL:-}")
+  [ -n "$model" ] || model=3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx
+  for candidate in $DIARIZE_EMBEDDING_MODELS; do
+    if [ "$model" = "$candidate" ]; then
+      export WHISPER_DIARIZE_EMBEDDING_MODEL="$model"
+      return 0
+    fi
+    valid="${valid:+$valid, }$candidate"
+  done
+  exiterr "WHISPER_DIARIZE_EMBEDDING_MODEL must be one of: $valid"
+}
 # End strict diarization option helpers.
 
 # Source bind-mounted env file if present (takes precedence over --env-file)
@@ -247,6 +286,7 @@ fi
 
 configure_decoding_options
 configure_diarization_threads
+configure_diarization_embedding_model
 
 mkdir -p /var/lib/whisper
 # Create the dedicated temp directory for audio uploads.
@@ -392,6 +432,7 @@ export HF_HOME=/var/lib/whisper
 # Persist config values so whisper_manage can read them without the env file
 printf '%s' "$WHISPER_PORT"  > /var/lib/whisper/.port
 printf '%s' "$WHISPER_MODEL" > /var/lib/whisper/.model
+printf '%s' "$WHISPER_DIARIZE_EMBEDDING_MODEL" > /var/lib/whisper/.diarize_embedding_model
 printf '%s' "$server_addr"   > /var/lib/whisper/.server_addr
 
 echo

@@ -204,6 +204,7 @@ CPU 映像支援 `linux/amd64` 和 `linux/arm64`。`:cuda` 標籤僅支援 `linu
 | `WHISPER_LOCAL_ONLY` | 設為任意非空值（如 `true`）時，停用所有 HuggingFace 模型下載。適用於預先快取模型的離線或隔離網路部署。 | *（未設定）* |
 | `WHISPER_WORD_TIMESTAMPS` | 設為 `true` 時，全域啟用詞級時間戳。`verbose_json` 輸出將包含頂層 `words` 陣列，含每個詞的起止時間和置信度。也可透過 `timestamp_granularities[]=word` 按請求啟用。 | *（未設定）* |
 | `WHISPER_DIARIZATION` | 設為 `true` 啟用說話人分離，識別每個片段中的說話人。使用 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 和 pyannote segmentation-3.0 ONNX 模型（約 45 MB，首次使用時自動下載）。不支援串流模式。 | *（未設定）* |
+| `WHISPER_DIARIZE_EMBEDDING_MODEL` | 說話人嵌入模型檔名，取自 sherpa-onnx [speaker-recongition-models](https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models) 發布。預設模型使用中文普通話訓練；英語音訊可考慮 `wespeaker_en_voxceleb_resnet34_LM.onnx` 或 `nemo_en_titanet_large.onnx`。參見[說話人分離](#說話人分離)。 | `3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx` |
 | `WHISPER_DIARIZE_NUM_SPEAKERS` | 說話人確切數量（如已知）。提高聚類準確性。設為 `-1` 或留空表示自動偵測。 | `-1` |
 | `WHISPER_DIARIZE_THREADS` | 分割和嵌入模型各自使用的 CPU 執行緒數。接受 `1` 至 `2147483647` 的標準十進位整數；未設定或為空時繼承 `WHISPER_THREADS`。 | `WHISPER_THREADS` |
 | `WHISPER_DIARIZE_THRESHOLD` | 自動偵測時使用的聚類閾值。值越小偵測到的說話人越多，值越大偵測到的越少。設定確切說話人數量時會忽略此項。 | `0.5` |
@@ -767,6 +768,17 @@ docker exec whisper whisper_manage --downloaddiarize
 與重複控制選項相同，`WHISPER_DIARIZE_THREADS` 的值可包含首尾 ASCII 空白，以及最多一對相符的外層引號。使用 `1` 至 `2147483647` 的 ASCII 十進位數字，不含正負號或前置零。非空無效值會在模型載入前阻止啟動，即使未啟用說話人分離也是如此。僅設定此選項不會啟用說話人分離。
 
 這不是整個行程的執行緒數上限。其他程式庫和請求工作執行緒可能使用額外執行緒，增加執行緒數不能保證加速或輸出完全一致。即使使用 `:cuda` 映像，說話人分離仍在 CPU 上執行，且僅支援批次處理。請依照[環境變數的重新啟動/重建說明](#環境變數)套用變更；更新或回復舊版時保留模型資料卷。
+
+**說話人嵌入模型：** 預設嵌入模型 `3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx` 使用中文普通話訓練。在英語錄音中，它可能把同一位說話人拆分為多個標籤。設定 `WHISPER_DIARIZE_EMBEDDING_MODEL` 可使用 sherpa-onnx [speaker-recongition-models](https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models) 發布中的其他模型，例如：
+
+```bash
+# 在 whisper.env 中：
+WHISPER_DIARIZE_EMBEDDING_MODEL=wespeaker_en_voxceleb_resnet34_LM.onnx
+```
+
+英語訓練的選項包括 `wespeaker_en_voxceleb_resnet34_LM.onnx`（約 27 MB）和 `nemo_en_titanet_large.onnx`（約 101 MB）。沒有一個模型適用於所有錄音，請用你自己的音訊進行比較。請使用發布中完整且區分大小寫的 `.onnx` 檔名。無法辨識的非空值會在載入模型前阻止啟動，即使未啟用說話人分離也是如此。該值可包含首尾 ASCII 空白，以及最多一對相符的外層引號。
+
+所選模型會在首次使用時下載，並快取在 `/var/lib/whisper` 資料卷中，與先前使用過的模型並存。`whisper_manage --downloaddiarize` 會預先下載容器啟動時設定的模型。聚類閾值與模型相關：切換模型後，請重新調整 `WHISPER_DIARIZE_THRESHOLD` 或設定 `WHISPER_DIARIZE_NUM_SPEAKERS`。未設定或為空時保持預設模型，現有快取和閾值不受影響。
 
 ## 使用計數
 
