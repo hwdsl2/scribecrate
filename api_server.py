@@ -52,6 +52,33 @@ _condition_on_previous_text = True  # preserve faster-whisper's decoding default
 _no_repeat_ngram_size = 0  # 0 disables repeated token n-gram restrictions
 _diarization_enabled = False  # set via WHISPER_DIARIZATION=true
 _diarize_threads = 2  # resolved independently of faster-whisper's thread parser
+_DEFAULT_DIARIZE_EMBEDDING_MODEL = "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+_diarize_embedding_model = _DEFAULT_DIARIZE_EMBEDDING_MODEL
+# Same list as diarizer.EMBEDDING_MODELS; duplicated so that validation does not
+# import the optional diarizer (NumPy, sherpa-onnx) when diarization is disabled.
+_DIARIZE_EMBEDDING_MODELS = (
+    "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
+    "3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx",
+    "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+    "3dspeaker_speech_eres2net_base_200k_sv_zh-cn_16k-common.onnx",
+    "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
+    "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
+    "3dspeaker_speech_eres2net_sv_en_voxceleb_16k.onnx",
+    "3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
+    "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
+    "nemo_en_speakerverification_speakernet.onnx",
+    "nemo_en_titanet_large.onnx",
+    "nemo_en_titanet_small.onnx",
+    "wespeaker_en_voxceleb_CAM++.onnx",
+    "wespeaker_en_voxceleb_CAM++_LM.onnx",
+    "wespeaker_en_voxceleb_resnet152_LM.onnx",
+    "wespeaker_en_voxceleb_resnet221_LM.onnx",
+    "wespeaker_en_voxceleb_resnet293_LM.onnx",
+    "wespeaker_en_voxceleb_resnet34.onnx",
+    "wespeaker_en_voxceleb_resnet34_LM.onnx",
+    "wespeaker_zh_cnceleb_resnet34.onnx",
+    "wespeaker_zh_cnceleb_resnet34_LM.onnx",
+)
 _max_upload_bytes = 1024 * 1024 * 1024  # 1 GiB by default; 0 disables the limit
 _UPLOAD_CHUNK_SIZE = 1024 * 1024
 _UNSUPPORTED_DIARIZE_MODEL = "gpt-4o-transcribe-diarize"
@@ -113,9 +140,11 @@ def _load_diarizer() -> None:
             num_speakers=num_speakers,
             cluster_threshold=threshold,
             num_threads=_diarize_threads,
+            embedding_model=_diarize_embedding_model,
         )
         _diarization_enabled = True
         logger.info("Diarization enabled (num_threads=%d per model).", _diarize_threads)
+        logger.info("Diarization embedding model: %s", _diarize_embedding_model)
     except Exception as exc:
         logger.warning("Failed to load diarizer (diarization disabled): %s", exc)
         _diarization_enabled = False
@@ -161,8 +190,19 @@ def _load_decoding_options() -> None:
 
 
 def _load_diarization_options() -> None:
-    """Resolve threads before model loading, outside optional-load error handling."""
-    global _diarize_threads
+    """Resolve options before model loading, outside optional-load error handling."""
+    global _diarize_threads, _diarize_embedding_model
+
+    # Filenames are case-sensitive; only known release models are accepted.
+    embedding_model = (
+        _normalized_env_option("WHISPER_DIARIZE_EMBEDDING_MODEL")
+        or _DEFAULT_DIARIZE_EMBEDDING_MODEL
+    )
+    if embedding_model not in _DIARIZE_EMBEDDING_MODELS:
+        raise ValueError(
+            "WHISPER_DIARIZE_EMBEDDING_MODEL must be one of: "
+            + ", ".join(_DIARIZE_EMBEDDING_MODELS)
+        )
 
     value = _normalized_env_option("WHISPER_DIARIZE_THREADS")
     enabled = os.environ.get("WHISPER_DIARIZATION", "").strip().lower() == "true"
@@ -196,6 +236,7 @@ def _load_diarization_options() -> None:
                 )
             threads = 1  # unused; do not narrow an existing Whisper-only setting
     _diarize_threads = threads
+    _diarize_embedding_model = embedding_model
 
 
 def _load_model() -> None:

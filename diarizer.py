@@ -16,6 +16,7 @@ import logging
 import os
 import subprocess
 import tarfile
+from urllib.parse import quote
 
 import numpy as np
 import sherpa_onnx
@@ -30,14 +31,42 @@ _SEG_MODEL_URL = (
     "https://github.com/k2-fsa/sherpa-onnx/releases/download/"
     "speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
 )
-_EMB_MODEL_URL = (
+_EMB_MODEL_BASE_URL = (
     "https://github.com/k2-fsa/sherpa-onnx/releases/download/"
     "speaker-recongition-models/"
-    "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
 )
 
 _SEG_MODEL_REL = "sherpa-onnx-pyannote-segmentation-3-0/model.onnx"
+# Default speaker embedding model (Mandarin-trained). Unchanged so existing
+# caches and tuned thresholds keep working.
 _EMB_MODEL_REL = "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+_EMB_MODEL_URL = _EMB_MODEL_BASE_URL + _EMB_MODEL_REL
+
+# Speaker embedding models published in the sherpa-onnx release above.
+# Keep in sync with api_server.py, run.sh and manage.sh.
+EMBEDDING_MODELS = (
+    "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
+    "3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx",
+    "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+    "3dspeaker_speech_eres2net_base_200k_sv_zh-cn_16k-common.onnx",
+    "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
+    "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
+    "3dspeaker_speech_eres2net_sv_en_voxceleb_16k.onnx",
+    "3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
+    "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
+    "nemo_en_speakerverification_speakernet.onnx",
+    "nemo_en_titanet_large.onnx",
+    "nemo_en_titanet_small.onnx",
+    "wespeaker_en_voxceleb_CAM++.onnx",
+    "wespeaker_en_voxceleb_CAM++_LM.onnx",
+    "wespeaker_en_voxceleb_resnet152_LM.onnx",
+    "wespeaker_en_voxceleb_resnet221_LM.onnx",
+    "wespeaker_en_voxceleb_resnet293_LM.onnx",
+    "wespeaker_en_voxceleb_resnet34.onnx",
+    "wespeaker_en_voxceleb_resnet34_LM.onnx",
+    "wespeaker_zh_cnceleb_resnet34.onnx",
+    "wespeaker_zh_cnceleb_resnet34_LM.onnx",
+)
 
 # ---------------------------------------------------------------------------
 # Module-level state
@@ -55,10 +84,19 @@ def _download_file(url: str, dest: str) -> None:
     )
 
 
-def _ensure_models(cache_dir: str) -> tuple:
+def _check_embedding_model(embedding_model) -> None:
+    """Accept only known release filenames, so no other path or URL is built."""
+    if type(embedding_model) is not str or embedding_model not in EMBEDDING_MODELS:
+        raise ValueError(
+            "embedding_model must be one of: " + ", ".join(EMBEDDING_MODELS)
+        )
+
+
+def _ensure_models(cache_dir: str, embedding_model: str = _EMB_MODEL_REL) -> tuple:
     """Download ONNX models if not already present. Returns (seg_path, emb_path)."""
+    _check_embedding_model(embedding_model)
     seg_path = os.path.join(cache_dir, _SEG_MODEL_REL)
-    emb_path = os.path.join(cache_dir, _EMB_MODEL_REL)
+    emb_path = os.path.join(cache_dir, embedding_model)
 
     if not os.path.isfile(seg_path):
         archive = os.path.join(cache_dir, "sherpa-onnx-pyannote-segmentation-3-0.tar.bz2")
@@ -69,7 +107,7 @@ def _ensure_models(cache_dir: str) -> tuple:
         os.unlink(archive)
 
     if not os.path.isfile(emb_path):
-        _download_file(_EMB_MODEL_URL, emb_path)
+        _download_file(_EMB_MODEL_BASE_URL + quote(embedding_model), emb_path)
 
     return seg_path, emb_path
 
@@ -79,6 +117,7 @@ def load(
     num_speakers: int = -1,
     cluster_threshold: float = 0.5,
     num_threads: int = 1,
+    embedding_model: str = _EMB_MODEL_REL,
 ) -> None:
     """Download ONNX models if needed, initialize the diarization pipeline."""
     global _sd
@@ -87,8 +126,9 @@ def load(
     # bool is an int subclass, but is not a meaningful thread configuration.
     if type(num_threads) is not int or not 1 <= num_threads <= 2147483647:
         raise ValueError("num_threads must be an integer from 1 to 2147483647.")
+    _check_embedding_model(embedding_model)
 
-    seg_path, emb_path = _ensure_models(cache_dir)
+    seg_path, emb_path = _ensure_models(cache_dir, embedding_model)
 
     # If the speaker count is unknown, use threshold-based auto clustering.
     num_clusters = num_speakers if num_speakers > 0 else -1
@@ -118,11 +158,12 @@ def load(
 
     _sd = sherpa_onnx.OfflineSpeakerDiarization(config)
     logger.info(
-        "Diarization pipeline ready (sample_rate=%d, num_clusters=%d, threshold=%.2f, num_threads=%d per model)",
+        "Diarization pipeline ready (sample_rate=%d, num_clusters=%d, threshold=%.2f, num_threads=%d per model, embedding_model=%s)",
         _sd.sample_rate,
         num_clusters,
         cluster_threshold,
         num_threads,
+        embedding_model,
     )
 
 

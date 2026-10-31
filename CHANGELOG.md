@@ -2,6 +2,34 @@
 
 Notable changes to ScribeCrate are documented here.
 
+## 2026-10-30
+
+### Added
+
+- Select a speaker embedding model with `WHISPER_DIARIZE_EMBEDDING_MODEL`, using
+  a maintained allowlist of sherpa-onnx release filenames. The existing
+  3D-Speaker default is unchanged; alternatives include WeSpeaker ResNet34-LM
+  and NeMo TitaNet large. Models use separate cache files for reuse.
+- `whisper_manage --downloaddiarize` now pre-downloads the embedding model
+  configured at container startup, including bind-mounted env-file settings.
+- Configure the embedding model and clustering threshold in the Colab notebook.
+
+### Compatibility
+
+- Unset/empty embedding selection preserves the existing default model,
+  threshold, cache filename, thread behavior, and API formats. Invalid nonempty
+  values stop startup before model loading, even with diarization disabled.
+- Clustering thresholds are model-specific. Compare representative recordings
+  and retune after switching, or set an exact speaker count if known.
+
+### Fixed
+
+- Clarified that the approximate total ONNX model size applies to the default
+  embedding; alternative embedding sizes exclude the shared segmentation model.
+- Added real alternative-model CI coverage for mounted-file precedence, native
+  configuration and saved selection in management commands, plus dependency-free
+  notebook configuration checks.
+
 ## 2026-10-27
 
 Release: `2026.10.2`

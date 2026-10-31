@@ -117,7 +117,8 @@ class DiarizationOptionTests(unittest.TestCase):
             with self.assertLogs(api_server.logger, level="INFO") as logs:
                 api_server._load_diarizer()
             fake.load.assert_called_once_with(cache_dir="/fixture/cache", num_speakers=2,
-                                              cluster_threshold=0.7, num_threads=6)
+                                              cluster_threshold=0.7, num_threads=6,
+                                              embedding_model=api_server._DEFAULT_DIARIZE_EMBEDDING_MODEL)
             self.assertIn("num_threads=6", " ".join(logs.output))
             self.assertTrue(api_server._diarization_enabled)
             fake.load.side_effect = RuntimeError("fixture native load failure")
