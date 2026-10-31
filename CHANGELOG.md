@@ -10,6 +10,8 @@ Notable changes to ScribeCrate are documented here.
   a maintained allowlist of sherpa-onnx release filenames. The existing
   3D-Speaker default is unchanged; alternatives include WeSpeaker ResNet34-LM
   and NeMo TitaNet large. Models use separate cache files for reuse.
+  Thanks to [@surfnterd](https://github.com/surfnterd) for configurable diarization
+  embedding model support in [#16](https://github.com/hwdsl2/scribecrate/pull/16).
 - `whisper_manage --downloaddiarize` now pre-downloads the embedding model
   configured at container startup, including bind-mounted env-file settings.
 - Configure the embedding model and clustering threshold in the Colab notebook.
