@@ -37,6 +37,7 @@ COPY ./run.sh /opt/src/run.sh
 COPY ./manage.sh /opt/src/manage.sh
 COPY ./api_server.py /opt/src/api_server.py
 COPY ./diarizer.py /opt/src/diarizer.py
+COPY ./diarization_models.py /opt/src/diarization_models.py
 COPY ./LICENSE.md /opt/src/LICENSE.md
 RUN chmod 755 /opt/src/run.sh /opt/src/manage.sh \
     && ln -s /opt/src/manage.sh /usr/local/bin/whisper_manage

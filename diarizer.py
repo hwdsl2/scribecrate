@@ -13,13 +13,14 @@ See: https://opensource.org/licenses/MIT
 """
 
 import logging
-import os
-import subprocess
-import tarfile
-from urllib.parse import quote
 
 import numpy as np
 import sherpa_onnx
+
+from diarization_models import (
+    DEFAULT_EMBEDDING_MODEL, EMBEDDING_MODELS as MODEL_ASSETS,
+    SEGMENTATION_MODEL, ensure_models,
+)
 
 logger = logging.getLogger("whisper_server.diarizer")
 
@@ -36,52 +37,16 @@ _EMB_MODEL_BASE_URL = (
     "speaker-recongition-models/"
 )
 
-_SEG_MODEL_REL = "sherpa-onnx-pyannote-segmentation-3-0/model.onnx"
-# Default speaker embedding model (Mandarin-trained). Unchanged so existing
-# caches and tuned thresholds keep working.
-_EMB_MODEL_REL = "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+_SEG_MODEL_REL = SEGMENTATION_MODEL
+_EMB_MODEL_REL = DEFAULT_EMBEDDING_MODEL
 _EMB_MODEL_URL = _EMB_MODEL_BASE_URL + _EMB_MODEL_REL
-
-# Speaker embedding models published in the sherpa-onnx release above.
-# Keep in sync with api_server.py, run.sh and manage.sh.
-EMBEDDING_MODELS = (
-    "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
-    "3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx",
-    "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
-    "3dspeaker_speech_eres2net_base_200k_sv_zh-cn_16k-common.onnx",
-    "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
-    "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
-    "3dspeaker_speech_eres2net_sv_en_voxceleb_16k.onnx",
-    "3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
-    "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
-    "nemo_en_speakerverification_speakernet.onnx",
-    "nemo_en_titanet_large.onnx",
-    "nemo_en_titanet_small.onnx",
-    "wespeaker_en_voxceleb_CAM++.onnx",
-    "wespeaker_en_voxceleb_CAM++_LM.onnx",
-    "wespeaker_en_voxceleb_resnet152_LM.onnx",
-    "wespeaker_en_voxceleb_resnet221_LM.onnx",
-    "wespeaker_en_voxceleb_resnet293_LM.onnx",
-    "wespeaker_en_voxceleb_resnet34.onnx",
-    "wespeaker_en_voxceleb_resnet34_LM.onnx",
-    "wespeaker_zh_cnceleb_resnet34.onnx",
-    "wespeaker_zh_cnceleb_resnet34_LM.onnx",
-)
+EMBEDDING_MODELS = tuple(MODEL_ASSETS)
 
 # ---------------------------------------------------------------------------
 # Module-level state
 # ---------------------------------------------------------------------------
 
 _sd = None  # OfflineSpeakerDiarization instance
-
-
-def _download_file(url: str, dest: str) -> None:
-    """Download a file using curl (available in the container)."""
-    logger.info("Downloading %s -> %s", url, dest)
-    subprocess.run(
-        ["curl", "-fSL", "--retry", "3", "--retry-delay", "2", "-o", dest, url],
-        check=True,
-    )
 
 
 def _check_embedding_model(embedding_model) -> None:
@@ -92,24 +57,11 @@ def _check_embedding_model(embedding_model) -> None:
         )
 
 
-def _ensure_models(cache_dir: str, embedding_model: str = _EMB_MODEL_REL) -> tuple:
-    """Download ONNX models if not already present. Returns (seg_path, emb_path)."""
+def _ensure_models(cache_dir: str, embedding_model: str = _EMB_MODEL_REL,
+                   *, local_files_only: bool = False) -> tuple:
+    """Verify cached models and atomically download missing files when allowed."""
     _check_embedding_model(embedding_model)
-    seg_path = os.path.join(cache_dir, _SEG_MODEL_REL)
-    emb_path = os.path.join(cache_dir, embedding_model)
-
-    if not os.path.isfile(seg_path):
-        archive = os.path.join(cache_dir, "sherpa-onnx-pyannote-segmentation-3-0.tar.bz2")
-        _download_file(_SEG_MODEL_URL, archive)
-        logger.info("Extracting segmentation model...")
-        with tarfile.open(archive, "r:bz2") as tar:
-            tar.extractall(path=cache_dir, filter="data")
-        os.unlink(archive)
-
-    if not os.path.isfile(emb_path):
-        _download_file(_EMB_MODEL_BASE_URL + quote(embedding_model), emb_path)
-
-    return seg_path, emb_path
+    return ensure_models(cache_dir, embedding_model, local_files_only=local_files_only)
 
 
 def load(
@@ -118,6 +70,8 @@ def load(
     cluster_threshold: float = 0.5,
     num_threads: int = 1,
     embedding_model: str = _EMB_MODEL_REL,
+    *,
+    local_files_only: bool = False,
 ) -> None:
     """Download ONNX models if needed, initialize the diarization pipeline."""
     global _sd
@@ -128,7 +82,7 @@ def load(
         raise ValueError("num_threads must be an integer from 1 to 2147483647.")
     _check_embedding_model(embedding_model)
 
-    seg_path, emb_path = _ensure_models(cache_dir, embedding_model)
+    seg_path, emb_path = _ensure_models(cache_dir, embedding_model, local_files_only=local_files_only)
 
     # If the speaker count is unknown, use threshold-based auto clustering.
     num_clusters = num_speakers if num_speakers > 0 else -1

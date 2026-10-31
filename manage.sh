@@ -16,31 +16,6 @@ SERVER_ADDR_FILE="${WHISPER_DATA}/.server_addr"
 API_KEY_FILE="${WHISPER_DATA}/.api_key"
 AUTH_ENABLED_FILE="${WHISPER_DATA}/.auth_enabled"
 EMBEDDING_MODEL_FILE="${WHISPER_DATA}/.diarize_embedding_model"
-DEFAULT_EMBEDDING_MODEL="3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
-
-# Keep this list in sync with run.sh, diarizer.py and api_server.py.
-DIARIZE_EMBEDDING_MODELS="\
-  3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx \
-  3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx \
-  3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx \
-  3dspeaker_speech_eres2net_base_200k_sv_zh-cn_16k-common.onnx \
-  3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx \
-  3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx \
-  3dspeaker_speech_eres2net_sv_en_voxceleb_16k.onnx \
-  3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx \
-  3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx \
-  nemo_en_speakerverification_speakernet.onnx \
-  nemo_en_titanet_large.onnx \
-  nemo_en_titanet_small.onnx \
-  wespeaker_en_voxceleb_CAM++.onnx \
-  wespeaker_en_voxceleb_CAM++_LM.onnx \
-  wespeaker_en_voxceleb_resnet152_LM.onnx \
-  wespeaker_en_voxceleb_resnet221_LM.onnx \
-  wespeaker_en_voxceleb_resnet293_LM.onnx \
-  wespeaker_en_voxceleb_resnet34.onnx \
-  wespeaker_en_voxceleb_resnet34_LM.onnx \
-  wespeaker_zh_cnceleb_resnet34.onnx \
-  wespeaker_zh_cnceleb_resnet34_LM.onnx"
 
 exiterr() { echo "Error: $1" >&2; exit 1; }
 
@@ -62,7 +37,7 @@ Options:
   --getkey                             output the API key (machine-readable, no decoration)
   --listmodels                         list available Whisper model names and sizes
   --downloadmodel <model>              pre-download a model to the cache volume
-  --downloaddiarize                    pre-download diarization ONNX models
+  --downloaddiarize [embedding.onnx]   pre-download and verify diarization ONNX models
 
   -h, --help                           show this help message and exit
 
@@ -149,6 +124,7 @@ parse_args() {
   download_model=0
   download_diarize=0
   model_to_download=""
+  embedding_to_download=""
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -177,6 +153,10 @@ parse_args() {
       --downloaddiarize)
         download_diarize=1
         shift
+        if [ "$#" -gt 0 ] && [[ "$1" != -* ]]; then
+          embedding_to_download="$1"
+          shift
+        fi
         ;;
       -h|--help)
         show_usage "" 0
@@ -336,7 +316,7 @@ do_download_model() {
 
   export HF_HOME=/var/lib/whisper
 
-  _MODEL="$model_to_download" python3 - << 'PYEOF'
+  _MODEL="$model_to_download" python3 - << 'PYEOF' || exiterr "Whisper model download failed."
 import os, sys
 
 model_name = os.environ["_MODEL"]
@@ -366,49 +346,17 @@ PYEOF
 }
 
 do_download_diarize() {
-  # run.sh saves the resolved WHISPER_DIARIZE_EMBEDDING_MODEL at startup,
-  # including values from a bind-mounted /whisper.env.
-  local emb_name="" candidate known=0
-  [ -f "$EMBEDDING_MODEL_FILE" ] && emb_name=$(cat "$EMBEDDING_MODEL_FILE")
-  [ -n "$emb_name" ] || emb_name="$DEFAULT_EMBEDDING_MODEL"
-  for candidate in $DIARIZE_EMBEDDING_MODELS; do
-    [ "$emb_name" = "$candidate" ] && known=1
-  done
-  [ "$known" = 1 ] || exiterr "Unknown speaker embedding model '$emb_name'. Restart the container to refresh it."
-
-  echo
-  echo "Downloading diarization ONNX models to /var/lib/whisper..."
-  echo "  - Segmentation model (~5 MB)"
-  echo "  - Speaker embedding model: ${emb_name}"
-  echo
-
-  local cache_dir="/var/lib/whisper"
-  local seg_dir="${cache_dir}/sherpa-onnx-pyannote-segmentation-3-0"
-  local seg_model="${seg_dir}/model.onnx"
-  local emb_model="${cache_dir}/${emb_name}"
-
-  if [ ! -f "$seg_model" ]; then
-    echo "  Downloading segmentation model..."
-    curl -fSL --retry 3 --retry-delay 2 -o "${cache_dir}/seg.tar.bz2" \
-      "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
-    tar xjf "${cache_dir}/seg.tar.bz2" -C "$cache_dir"
-    rm -f "${cache_dir}/seg.tar.bz2"
-    echo "  Segmentation model ready."
-  else
-    echo "  Segmentation model already exists."
+  # Explicit prefetch takes precedence without changing the active saved model.
+  # An empty saved selection retains the existing default in the Python helper.
+  local emb_name="$embedding_to_download"
+  if [ -z "$emb_name" ] && [ -f "$EMBEDDING_MODEL_FILE" ]; then
+    emb_name=$(cat "$EMBEDDING_MODEL_FILE")
   fi
-
-  if [ ! -f "$emb_model" ]; then
-    echo "  Downloading embedding model..."
-    curl -fSL --retry 3 --retry-delay 2 -o "$emb_model" \
-      "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/${emb_name//+/%2B}"
-    echo "  Embedding model ready."
-  else
-    echo "  Embedding model already exists."
-  fi
+  python3 /opt/src/diarization_models.py --cache-dir "$WHISPER_DATA" \
+    --embedding-model="$emb_name" || exiterr "Diarization model download or verification failed."
 
   echo
-  echo "Diarization models downloaded successfully."
+  echo "To activate a different embedding, set WHISPER_DIARIZE_EMBEDDING_MODEL and restart or recreate the container."
   echo "To enable diarization, set WHISPER_DIARIZATION=true in your env file."
   echo
 }

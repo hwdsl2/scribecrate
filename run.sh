@@ -106,7 +106,7 @@ configure_diarization_threads() {
 }
 
 # Speaker embedding model filename from the sherpa-onnx speaker-recongition-models
-# release. Keep this list in sync with diarizer.py, api_server.py and manage.sh.
+# release. Keep this shell list in sync with diarization_models.EMBEDDING_MODELS.
 DIARIZE_EMBEDDING_MODELS="\
   3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx \
   3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx \
@@ -463,7 +463,7 @@ echo "  Port:     $WHISPER_PORT"
 echo "  Beam:     $WHISPER_BEAM"
 echo "  Max request beam: $WHISPER_MAX_REQUEST_BEAM"
 if [ -n "$WHISPER_LOCAL_ONLY" ]; then
-  echo "  Mode:     local-only (no HuggingFace downloads)"
+  echo "  Mode:     local-only (no automatic model downloads)"
 fi
 if [ "$(echo "$WHISPER_DIARIZATION" | tr '[:upper:]' '[:lower:]')" = "true" ]; then
   echo "  Diarize:  enabled"
@@ -503,24 +503,37 @@ cleanup() {
 }
 trap cleanup INT TERM
 
+# Resolve startup time from the shared model-download budget.
+startup_timeout=$(python3 - <<'PYEOF'
+import os
+import sys
+sys.path.insert(0, "/opt/src")
+from diarization_models import startup_timeout_seconds
+print(startup_timeout_seconds(
+    diarization_enabled=os.environ.get("WHISPER_DIARIZATION", "").strip().lower() == "true",
+    local_files_only=bool(os.environ.get("WHISPER_LOCAL_ONLY", "").strip()),
+))
+PYEOF
+) || exiterr "Cannot determine the model startup timeout."
+
 # Start the FastAPI server in the background
 cd /opt/src && python3 /opt/src/api_server.py &
 WHISPER_PID=$!
 
 # Wait for the server to become ready.
-# Allow up to 300 seconds — first-run model download can take several minutes
-# on a slow connection even for the base model (~145 MB).
+# Online diarization also needs time for both ONNX downloads and their retries.
+# Whisper-only and offline startup retain the original five-minute window.
 wait_for_server() {
-  local i=0
-  while [ "$i" -lt 300 ]; do
+  local deadline=$((SECONDS + startup_timeout))
+  while [ "$SECONDS" -lt "$deadline" ]; do
     if ! kill -0 "$WHISPER_PID" 2>/dev/null; then
       return 1
     fi
-    if curl -sf "http://127.0.0.1:${WHISPER_PORT}/health" >/dev/null 2>&1; then
+    if curl --connect-timeout 1 --max-time 2 -sf \
+      "http://127.0.0.1:${WHISPER_PORT}/health" >/dev/null 2>&1; then
       return 0
     fi
     sleep 1
-    i=$((i + 1))
   done
   return 1
 }
@@ -529,7 +542,7 @@ if ! wait_for_server; then
   if ! kill -0 "$WHISPER_PID" 2>/dev/null; then
     echo "Error: ScribeCrate server failed to start. Check the container logs for details." >&2
   else
-    echo "Error: ScribeCrate server did not become ready within 300 seconds." >&2
+    echo "Error: ScribeCrate server did not become ready within ${startup_timeout} seconds." >&2
     kill "$WHISPER_PID" 2>/dev/null
   fi
   exit 1
