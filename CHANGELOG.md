@@ -4,6 +4,8 @@ Notable changes to ScribeCrate are documented here.
 
 ## 2026-10-31
 
+Release: `2026.10.3`
+
 ### Added
 
 - Pass an optional embedding filename to `whisper_manage --downloaddiarize`
