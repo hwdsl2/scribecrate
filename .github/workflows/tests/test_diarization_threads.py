@@ -118,7 +118,8 @@ class DiarizationOptionTests(unittest.TestCase):
                 api_server._load_diarizer()
             fake.load.assert_called_once_with(cache_dir="/fixture/cache", num_speakers=2,
                                               cluster_threshold=0.7, num_threads=6,
-                                              embedding_model=api_server._DEFAULT_DIARIZE_EMBEDDING_MODEL)
+                                              embedding_model=api_server._DEFAULT_DIARIZE_EMBEDDING_MODEL,
+                                              local_files_only=bool(os.environ.get("WHISPER_LOCAL_ONLY", "").strip()))
             self.assertIn("num_threads=6", " ".join(logs.output))
             self.assertTrue(api_server._diarization_enabled)
             fake.load.side_effect = RuntimeError("fixture native load failure")
@@ -195,17 +196,18 @@ class DiarizerConstructionTests(unittest.TestCase):
             self.diarizer.load(num_threads=2)
         self.native.OfflineSpeakerDiarization.assert_not_called()
 
-    def test_cache_reuse_does_not_download(self):
-        # Exercise the real resolver against already cached files.
+    def test_invalid_cached_weights_do_not_initialize_native_pipeline(self):
         self.model_patch.stop()
         with tempfile.TemporaryDirectory() as directory:
             for name in (self.diarizer._SEG_MODEL_REL, self.diarizer._EMB_MODEL_REL):
                 path = Path(directory) / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.touch()
-            with mock.patch.object(self.diarizer, "_download_file") as download:
-                self.diarizer.load(directory, num_threads=6)
+            with mock.patch("diarization_models._download_file") as download:
+                with self.assertRaisesRegex(RuntimeError, "verification"):
+                    self.diarizer.load(directory, num_threads=6)
             download.assert_not_called()
+            self.native.OfflineSpeakerDiarization.assert_not_called()
 
     def test_turns_and_speaker_assignment_are_unchanged(self):
         turns = [types.SimpleNamespace(start=0.0, end=1.0, speaker=0),

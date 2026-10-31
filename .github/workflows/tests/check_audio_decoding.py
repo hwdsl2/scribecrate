@@ -6,6 +6,7 @@ import importlib.util
 from importlib.metadata import version
 import json
 import os
+import sys
 from pathlib import Path
 import tempfile
 import time
@@ -18,6 +19,7 @@ FIXTURE_SHA256 = "63a4b1e4c1dc655ac70961ffbf518acd249df237e5a0152faae9a4a8369497
 
 
 def load_api(path, name):
+    sys.path.insert(0, str(path.parent))
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from unittest import mock
+import urllib.error
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -91,6 +92,43 @@ class ColabConfigurationTests(unittest.TestCase):
                     if (ROOT / dependency).is_file() and dependency not in required:
                         pending.add(dependency)
         self.assertTrue(required <= downloaded, "Notebook omitted runtime files: " + str(required - downloaded))
+
+    def test_startup_wait_handles_slow_downloads_exit_and_deadline(self):
+        source = self.cells["start-server"].split(
+            "# Wait for startup using the same download budget as the container.", 1)[1]
+        for case, enabled, offline, expected_ready, expected_time in (
+                ("delayed", "true", "", True, 700),
+                ("dead", "true", "", False, 0),
+                ("unavailable", "", "", False, 300),
+                ("unavailable", "true", "true", False, 300)):
+            with self.subTest(case=case, enabled=enabled, offline=offline):
+                clock = [0]
+                def sleep(seconds):
+                    clock[0] += seconds
+                response = mock.MagicMock()
+                response.__enter__.return_value.read.return_value = b'{"model":"fixture"}'
+                def request(*args, **kwargs):
+                    self.assertLessEqual(kwargs["timeout"], 3)
+                    if case == "delayed" and clock[0] >= 700:
+                        return response
+                    raise urllib.error.URLError("fixture not ready")
+                poll = mock.Mock(return_value=1 if case == "dead" else None)
+                namespace = {
+                    "server_env": {"WHISPER_DIARIZATION": enabled, "WHISPER_LOCAL_ONLY": offline},
+                    "WHISPER_PORT": 9000,
+                    "server_proc": SimpleNamespace(pid=123, poll=poll),
+                    "time": SimpleNamespace(monotonic=lambda: clock[0], sleep=sleep),
+                    "urllib": SimpleNamespace(request=SimpleNamespace(urlopen=mock.Mock(side_effect=request))),
+                    "json": json,
+                }
+                with mock.patch("builtins.open", mock.mock_open(read_data="fixture startup log")), \
+                        redirect_stdout(io.StringIO()) as output:
+                    exec(compile(source, "colab-startup-wait", "exec"), namespace)
+                self.assertIs(namespace["ready"], expected_ready)
+                self.assertEqual(clock[0], expected_time)
+                if case == "dead":
+                    namespace["urllib"].request.urlopen.assert_not_called()
+                    self.assertIn("Server exited with code 1", output.getvalue())
 
 
 if __name__ == "__main__":

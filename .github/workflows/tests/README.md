@@ -42,8 +42,20 @@ these tests do not prove that any setting eliminates every hallucination.
 ## Diarization thread checks
 
 `test_diarization_embedding_model.py` covers the allowlist/default, normalization,
-early startup rejection, shell/Python parity, URL encoding, cache reuse and
-selection propagation. Its optional runtime dependencies are stubbed.
+early startup rejection, shell/Python parity, selection propagation and the fifth
+positional embedding argument. Its optional runtime dependencies are stubbed.
+
+`test_diarization_models.py` covers pinned metadata for all 21 embeddings, verified
+cache reuse, CAM++ URL encoding, preservation/recovery of corrupt caches, verified
+model and segmentation-directory symlinks, preservation of broken/invalid links,
+nonblocking rejection of FIFOs, failed-download cleanup and exact-member archive
+extraction (archive links remain rejected). It also checks automatic offline
+behavior and explicit management prefetch without activation. Startup checks cover
+the shared download budget, delayed readiness, server exit and bounded health
+probes. Whisper prefetch retains its offline check and propagates download failures.
+Small synthetic assets exercise the real hashing/publication paths. Downloads
+are stubbed and filesystem failures are injected where needed. Python API/native
+construction tests remain dependency-free.
 
 `test_diarization_threads.py` covers strict startup validation, inheritance,
 direct-Python legacy fallback, disabled-feature isolation, shell export/parsing
@@ -58,6 +70,8 @@ both actual native config arguments, nonempty native diarization turns, speech
 segments/speaker labels, text/SRT/VTT output, and overlapping batch diarization
 with a separate SSE request. SSE must complete without speaker fields. It does
 not change production scheduling or establish new concurrency guarantees.
+After warming the cache, the helper reloads Whisper and diarization with
+`WHISPER_LOCAL_ONLY=true` and checks another real request with speaker fields.
 
 The helper compares explicit `1`, inherited `2`, and explicit `6`, with a warm-up
 and three timed runs each. It records model hashes, resolved dependency versions,
@@ -80,15 +94,17 @@ The mounted file also selects WeSpeaker over a conflicting container TitaNet
 setting. CPU jobs check the live server log, saved selection and selected cache,
 then pass WeSpeaker explicitly into the native helper and verify its result.
 Docker exec processes do not inherit exports made inside the entrypoint.
-The management command is checked against the saved selection while the original
-container environment still names TitaNet. The CUDA job retains default-model
-coverage; none of these checks rank model accuracy.
+The management command is checked for verified models using the saved selection
+while the original container environment still names TitaNet. The CUDA job retains
+default-model coverage; none of these checks rank model accuracy.
 
 `test_colab_configuration.py` runs configuration/environment-building cells with
 GPU detection and downloads mocked. It checks unchanged defaults, embedding
 choices, automatic speaker counts, threshold forwarding, and that notebook
-downloads cover repository-local runtime imports. It does not start a server or
-establish a successful hosted Colab/GPU run. For a pre-merge hosted smoke check,
+downloads cover repository-local runtime imports, including `diarization_models.py`.
+It also checks the startup deadline, delayed readiness and early server exit.
+It does not start a server or establish a successful hosted Colab/GPU run.
+For a pre-merge hosted smoke check,
 use the candidate commit's runtime scripts rather than the current main scripts.
 
 ### Public diarization fixture

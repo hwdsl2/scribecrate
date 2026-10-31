@@ -10,6 +10,7 @@ on:
       - '.dockerignore'
       - 'api_server.py'
       - 'diarizer.py'
+      - 'diarization_models.py'
       - 'Dockerfile'
       - 'Dockerfile.cuda'
       - 'manage.sh'

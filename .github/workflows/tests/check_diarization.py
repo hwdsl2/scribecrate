@@ -174,6 +174,14 @@ def check(args):
     results["overlapping_batch_sse"] = "passed"
     assert max(intervals["batch_start"], intervals["sse_start"]) < min(intervals["batch_end"], intervals["sse_end"])
     results["overlap_intervals"] = intervals
+    # Reuse the warm cache through the actual API's offline startup path.
+    # No new weights should be downloaded, and diarization must remain enabled.
+    os.environ["WHISPER_LOCAL_ONLY"] = "true"
+    api._load_model()
+    api._load_diarizer()
+    assert api._diarization_enabled and diarizer.is_loaded(), "Offline cached pipeline did not load"
+    asyncio.run(request(api, args.audio))
+    results["offline_cached_api"] = "passed"
     results["model_sha256"] = {
         name: hashlib.sha256(path.read_bytes()).hexdigest()
         for name in (diarizer._SEG_MODEL_REL, api._diarize_embedding_model)

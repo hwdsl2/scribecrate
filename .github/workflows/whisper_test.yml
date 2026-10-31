@@ -362,7 +362,7 @@ jobs:
             manage_output=$(docker exec "$TEST_ID" whisper_manage --downloaddiarize)
             printf '%s\n' "$manage_output"
             printf '%s\n' "$manage_output" | grep -F "Speaker embedding model: $expected_embedding" >/dev/null
-            printf '%s\n' "$manage_output" | grep -F 'Embedding model already exists.' >/dev/null
+            printf '%s\n' "$manage_output" | grep -F 'Diarization models verified:' >/dev/null
           fi
 
           docker restart "$TEST_ID"

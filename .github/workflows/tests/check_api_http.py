@@ -2,6 +2,7 @@
 import argparse
 import importlib.util
 import os
+import sys
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -57,6 +58,7 @@ def check_translation_models(api, client, headers, calls, directory):
 
 
 def check(source, baseline=None):
+    sys.path.insert(0, str(source.parent))
     spec = importlib.util.spec_from_file_location("checked_api", source)
     api = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(api)

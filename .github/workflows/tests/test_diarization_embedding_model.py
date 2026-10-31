@@ -65,14 +65,12 @@ class EmbeddingModelListTests(unittest.TestCase):
         self.assertEqual(len(models), len(set(models)))
         self.assertEqual(api_server._DIARIZE_EMBEDDING_MODELS, models)
         self.assertEqual(shell_list("run.sh"), models)
-        self.assertEqual(shell_list("manage.sh"), models)
         for model in ENGLISH + (DEFAULT,):
             self.assertIn(model, models)
         self.assertEqual(diarizer._EMB_MODEL_REL, DEFAULT)
         self.assertEqual(diarizer._EMB_MODEL_URL, BASE_URL + DEFAULT)
         self.assertEqual(api_server._DEFAULT_DIARIZE_EMBEDDING_MODEL, DEFAULT)
         self.assertIn("model=" + DEFAULT + "\n", (ROOT / "run.sh").read_text())
-        self.assertIn('DEFAULT_EMBEDDING_MODEL="' + DEFAULT + '"', (ROOT / "manage.sh").read_text())
         for model in models:
             self.assertRegex(model, r"\A[A-Za-z0-9][A-Za-z0-9_.+-]*\.onnx\Z")
 
@@ -81,7 +79,7 @@ class EmbeddingModelOptionTests(unittest.TestCase):
     def setUp(self):
         for patch in (
             mock.patch.dict(os.environ, {
-                OPTION: "", "WHISPER_DIARIZE_THREADS": "", "WHISPER_THREADS": "",
+                "WHISPER_LOCAL_ONLY": "", OPTION: "", "WHISPER_DIARIZE_THREADS": "", "WHISPER_THREADS": "",
                 "WHISPER_DIARIZATION": "true", "WHISPER_CONDITION_ON_PREVIOUS_TEXT": "",
                 "WHISPER_NO_REPEAT_NGRAM_SIZE": "",
             }),
@@ -140,7 +138,7 @@ class EmbeddingModelOptionTests(unittest.TestCase):
                 api_server._load_diarizer()
         fake.load.assert_called_once_with(cache_dir="/fixture/cache", num_speakers=-1,
                                           cluster_threshold=0.8, num_threads=6,
-                                          embedding_model=ENGLISH[0])
+                                          embedding_model=ENGLISH[0], local_files_only=False)
         output = " ".join(logs.output)
         self.assertIn("Diarization enabled (num_threads=6 per model).", output)
         self.assertIn("Diarization embedding model: " + ENGLISH[0], output)
@@ -166,15 +164,15 @@ class DiarizerEmbeddingModelTests(unittest.TestCase):
     def test_load_uses_selected_model_and_legacy_calls_keep_default(self):
         with mock.patch.object(self.diarizer, "_ensure_models", return_value=("seg.onnx", "emb.onnx")) as models:
             self.diarizer.load("/cache", -1, 0.8, num_threads=2, embedding_model=ENGLISH[1])
-            models.assert_called_with("/cache", ENGLISH[1])
+            models.assert_called_with("/cache", ENGLISH[1], local_files_only=False)
             self.native.SpeakerEmbeddingExtractorConfig.assert_called_with(model="emb.onnx", num_threads=2)
             self.diarizer.load("/cache", 2, 0.5)
-            models.assert_called_with("/cache", DEFAULT)
+            models.assert_called_with("/cache", DEFAULT, local_files_only=False)
 
     def test_invalid_direct_values_fail_before_download_or_native_setup(self):
         for value in BAD + [None, b"nemo_en_titanet_large.onnx", 1, ("x",)]:
             with self.subTest(value=repr(value)[:60]):
-                with mock.patch.object(self.diarizer, "_download_file") as download:
+                with mock.patch("diarization_models._download_file") as download:
                     with self.assertRaisesRegex(ValueError, "embedding_model"):
                         self.diarizer.load(embedding_model=value)
                     with self.assertRaisesRegex(ValueError, "embedding_model"):
@@ -182,26 +180,11 @@ class DiarizerEmbeddingModelTests(unittest.TestCase):
                 download.assert_not_called()
         self.native.OfflineSpeakerDiarizationConfig.assert_not_called()
 
-    def test_downloads_selected_model_url_into_cache(self):
-        with tempfile.TemporaryDirectory() as directory:
-            segmentation = Path(directory) / self.diarizer._SEG_MODEL_REL
-            segmentation.parent.mkdir(parents=True)
-            segmentation.touch()
-            cases = [(ENGLISH[0], BASE_URL + ENGLISH[0]),
-                     ("wespeaker_en_voxceleb_CAM++.onnx", BASE_URL + "wespeaker_en_voxceleb_CAM%2B%2B.onnx"),
-                     (DEFAULT, BASE_URL + DEFAULT)]
-            for model, url in cases:
-                with mock.patch.object(self.diarizer, "_download_file") as download:
-                    seg_path, emb_path = self.diarizer._ensure_models(directory, model)
-                download.assert_called_once_with(url, os.path.join(directory, model))
-                self.assertEqual((seg_path, emb_path), (str(segmentation), os.path.join(directory, model)))
-            # Cached files, including the unchanged default, are reused.
-            (Path(directory) / ENGLISH[0]).touch()
-            (Path(directory) / DEFAULT).touch()
-            with mock.patch.object(self.diarizer, "_download_file") as download:
-                self.diarizer._ensure_models(directory, ENGLISH[0])
-                self.diarizer._ensure_models(directory)
-            download.assert_not_called()
+    def test_fifth_positional_embedding_argument_is_preserved(self):
+        with mock.patch.object(self.diarizer, "_ensure_models", return_value=("seg.onnx", "emb.onnx")) as models:
+            self.diarizer.load("/cache", 2, 0.5, 1, ENGLISH[0], local_files_only=True)
+        models.assert_called_once_with("/cache", ENGLISH[0], local_files_only=True)
+
 
 
 class ShellEmbeddingModelTests(unittest.TestCase):
@@ -232,40 +215,6 @@ class ShellEmbeddingModelTests(unittest.TestCase):
                                 with self.assertRaises(ValueError):
                                     api_server._load_diarization_options()
 
-    def test_manage_sh_downloads_the_saved_model(self):
-        source = (ROOT / "manage.sh").read_text()
-        function = source[source.index("do_download_diarize() {"):source.index("\ncheck_container\n")]
-        header = source[source.index("EMBEDDING_MODEL_FILE="):source.index("\nexiterr() {")]
-        with tempfile.TemporaryDirectory() as directory:
-            state = Path(directory) / ".diarize_embedding_model"
-            log = Path(directory) / "curl.log"
-            # Stub curl, tar and rm so nothing is downloaded or removed.
-            script = ('exiterr() { echo "Error: $1" >&2; exit 1; }\n'
-                      'curl() { printf "%s\\n" "${@: -1}" >> "$CURL_LOG"; }\n'
-                      'tar() { :; }\nrm() { :; }\n' + header.replace(
-                          '"${WHISPER_DATA}/.diarize_embedding_model"', '"$STATE_FILE"') +
-                      '\n' + function + '\ndo_download_diarize\n')
-            cases = [(None, BASE_URL + DEFAULT), ("", BASE_URL + DEFAULT),
-                     (ENGLISH[0], BASE_URL + ENGLISH[0]),
-                     ("wespeaker_en_voxceleb_CAM++.onnx", BASE_URL + "wespeaker_en_voxceleb_CAM%2B%2B.onnx")]
-            for saved, url in cases:
-                if state.exists():
-                    state.unlink()
-                if saved is not None:
-                    state.write_text(saved)
-                if log.exists():
-                    log.unlink()
-                env = dict(os.environ, STATE_FILE=str(state), CURL_LOG=str(log))
-                result = subprocess.run(["bash", "-c", script], text=True, capture_output=True,
-                                        timeout=10, env=env)
-                with self.subTest(saved=saved):
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertIn(url, log.read_text().splitlines())
-            state.write_text("../unknown.onnx")
-            result = subprocess.run(["bash", "-c", script], text=True, capture_output=True, timeout=10,
-                                    env=dict(os.environ, STATE_FILE=str(state), CURL_LOG=str(log)))
-            self.assertEqual(result.returncode, 1)
-            self.assertIn("Unknown speaker embedding model", result.stderr)
 
 
 if __name__ == "__main__":
