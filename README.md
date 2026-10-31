@@ -201,7 +201,7 @@ This Docker image uses the following variables, that can be declared in an `env`
 | `WHISPER_CONDITION_ON_PREVIOUS_TEXT` | Condition decoding windows on previous text. Setting `false` may reduce repetition feedback loops but can reduce consistency between windows. | `true` |
 | `WHISPER_NO_REPEAT_NGRAM_SIZE` | Restrict repeated token n-grams within decoding. `0` disables this restriction; canonical decimal integer `0` through `2147483647`. N-grams are sequences of model tokens, not necessarily whole words. | `0` |
 | `WHISPER_MAX_UPLOAD_MB` | Maximum uploaded audio file size in MB. Requests above this limit return HTTP 413. Set to `0` to disable the limit. | `1024` |
-| `WHISPER_LOCAL_ONLY` | When set to any non-empty value (e.g. `true`), disables all HuggingFace model downloads. For offline or air-gapped deployments with pre-cached models. | *(not set)* |
+| `WHISPER_LOCAL_ONLY` | When set to any non-empty value (e.g. `true`), disables automatic HuggingFace and diarization ONNX model downloads. For offline or air-gapped deployments with pre-cached models. | *(not set)* |
 | `WHISPER_WORD_TIMESTAMPS` | When set to `true`, enables word-level timestamps globally for all requests. The `verbose_json` output will include a top-level `words` array with per-word timing and confidence. Can also be enabled per-request via `timestamp_granularities[]=word`. | *(not set)* |
 | `WHISPER_DIARIZATION` | Set to `true` to enable speaker diarization. Identifies who is speaking in each segment. Uses [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) with pyannote segmentation-3.0 ONNX models (~46 MB with the default embedding model, auto-downloaded on first use). Not supported in streaming mode. | *(not set)* |
 | `WHISPER_DIARIZE_EMBEDDING_MODEL` | Speaker embedding model filename from the sherpa-onnx [speaker-recongition-models](https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models) release. The default is Mandarin-trained; for English, consider `wespeaker_en_voxceleb_resnet34_LM.onnx` or `nemo_en_titanet_large.onnx`. See [speaker embedding model](#speaker-diarization). | `3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx` |
@@ -216,7 +216,7 @@ The repetition controls apply to transcription and translation, both batch and S
 
 These settings accept surrounding ASCII whitespace and at most one matching pair of outer quotes. Empty values use defaults. Booleans accept ASCII case-insensitive `true`/`false`; integers must use ASCII digits, without signs or leading zeros. Invalid nonempty values stop startup before model loading.
 
-A bind-mounted `api_server.py` overrides the API bundled with the image. Remove the mount to use the bundled API, or update your custom copy when upgrading.
+A bind-mounted `api_server.py` overrides the API bundled with the image. Remove the mount to use the bundled API, or update your custom copy when upgrading. When replacing scripts manually, use `api_server.py`, `diarizer.py`, and `diarization_models.py` from the same revision.
 
 After editing a bind-mounted `/whisper.env`, restart the container. If it still sees the old file contents, recreate only that container. Changes to Docker/Compose container environment variables or the image require recreation, preserving the existing volumes and Compose project. A restart alone does not apply these changes.
 
@@ -778,7 +778,23 @@ WHISPER_DIARIZE_EMBEDDING_MODEL=wespeaker_en_voxceleb_resnet34_LM.onnx
 
 English-trained options include `wespeaker_en_voxceleb_resnet34_LM.onnx` (~27 MB) and `nemo_en_titanet_large.onnx` (~101 MB). Embedding file sizes vary by selection; these sizes exclude the shared segmentation model (~6 MB). No single model is best for every recording, so compare on your own audio. Use an exact, case-sensitive `.onnx` filename accepted by the maintained allowlist. Unknown nonempty values stop startup before model loading, even when diarization is disabled. The value accepts surrounding ASCII whitespace and at most one matching pair of outer quotes.
 
-The selected model is downloaded on first use and cached in the `/var/lib/whisper` volume next to any previously used model. `whisper_manage --downloaddiarize` pre-downloads the model the container was started with. Clustering thresholds are model-specific: after switching, re-tune `WHISPER_DIARIZE_THRESHOLD` or set `WHISPER_DIARIZE_NUM_SPEAKERS`. Unset or empty keeps the default model, so existing caches and thresholds are unchanged.
+The selected model is downloaded on first use and cached in the `/var/lib/whisper` volume next to any previously used model. `whisper_manage --downloaddiarize` pre-downloads the model the container was started with. Clustering thresholds are model-specific: after switching, re-tune `WHISPER_DIARIZE_THRESHOLD` or set `WHISPER_DIARIZE_NUM_SPEAKERS`. Unset or empty keeps the default model, so existing cache filenames and thresholds are unchanged.
+
+**Model verification:** Diarization ONNX models, including files already in the cache, are checked against pinned sizes and SHA-256 hashes when the pipeline loads. Matching cached files are reused without downloading again. An existing cache file that fails verification is preserved and identified in the logs. Move that file aside, then restart with downloads enabled to obtain a verified copy. Verification, download, or model-loading failures log a warning and disable diarization while transcription remains available. Newly downloaded models are verified before becoming cache files; incomplete or failed downloads are not used. Symbolic links to regular model files and to an existing segmentation directory are supported. Linked models must pass the same verification. Broken links and invalid targets are preserved and reported; repair them or move the cache entry aside before retrying.
+
+When diarization is enabled and automatic downloads are permitted, container and Colab startup waits include time for both ONNX downloads and their retries. Whisper-only and offline startup use a five-minute window. Waiting stops early if the server process exits.
+
+If you previously swapped weights under the default embedding filename, move them to their correct supported filename and select it explicitly. Restore or re-download the official default before switching back.
+
+**Offline compatibility change:** `WHISPER_LOCAL_ONLY` now also prevents automatic diarization ONNX downloads, in addition to HuggingFace downloads. Pre-cache the segmentation model and the selected embedding model before enabling offline mode. Explicit `whisper_manage --downloaddiarize` prefetch still permits ONNX downloads. The Whisper `--downloadmodel` command retains its existing offline check. For example:
+
+```bash
+docker exec whisper whisper_manage --downloaddiarize wespeaker_en_voxceleb_resnet34_LM.onnx
+```
+
+Without an argument it uses the model saved at container startup, or the existing default when no saved selection exists. Pre-downloading does not change the active model. Apply selection changes using the environment-variable restart/recreation guidance and keep the model volume for rollback.
+
+The supported weights come from the [upstream sherpa-onnx model release](https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models). Model weights have their own upstream licenses, separate from ScribeCrate's MIT license.
 
 ## Usage counts
 

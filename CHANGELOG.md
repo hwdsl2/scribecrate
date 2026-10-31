@@ -2,6 +2,42 @@
 
 Notable changes to ScribeCrate are documented here.
 
+## 2026-10-31
+
+### Added
+
+- Pass an optional embedding filename to `whisper_manage --downloaddiarize`
+  to pre-download another supported model without changing the active selection.
+
+### Fixed
+
+- Verify diarization ONNX downloads and existing cached models against pinned
+  sizes and SHA-256 hashes for all 21 supported embeddings. Downloads use bounded
+  HTTPS requests, private temporary files and atomic cache publication.
+- Extract only the expected regular segmentation model and license files.
+- Include the shared model helper in CPU/CUDA images and Colab downloads.
+- Allow container and Colab startup to wait for online diarization downloads and
+  retries, with bounded health probes and early detection of server-process exit.
+- Report Whisper management download failures with a nonzero exit status.
+
+### Compatibility
+
+- The existing default, 21-model allowlist, cache filenames, thread settings,
+  response formats and positional embedding argument remain unchanged.
+- Matching caches are reused. Invalid existing files are preserved and identified
+  in the logs; move the affected file aside and restart with downloads enabled
+  to recover. Diarization verification/download failures log a warning and disable
+  diarization while transcription remains available.
+- Symbolic links to regular model files and to an existing segmentation directory
+  are supported. Linked models must pass verification; broken links and invalid
+  targets are preserved and reported.
+- `WHISPER_LOCAL_ONLY` now also prevents automatic diarization ONNX downloads.
+  Pre-cache the segmentation model and selected embedding before enabling it.
+  Explicit diarization prefetch remains permitted; the Whisper model-download
+  command retains its existing offline check.
+- When replacing runtime scripts manually, use `api_server.py`, `diarizer.py`
+  and the new `diarization_models.py` from the same revision.
+
 ## 2026-10-30
 
 ### Added

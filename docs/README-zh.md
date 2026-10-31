@@ -201,7 +201,7 @@ CPU 镜像支持 `linux/amd64` 和 `linux/arm64`。`:cuda` 标签仅支持 `linu
 | `WHISPER_CONDITION_ON_PREVIOUS_TEXT` | 使用前一窗口的文本作为解码上下文。设为 `false` 可能减少重复反馈循环，但也可能降低窗口间的一致性。 | `true` |
 | `WHISPER_NO_REPEAT_NGRAM_SIZE` | 限制解码中的重复 token n-gram。`0` 表示禁用；接受 `0` 至 `2147483647` 的规范十进制整数。n-gram 是模型 token 的序列，不一定对应完整的单词。 | `0` |
 | `WHISPER_MAX_UPLOAD_MB` | 上传音频文件的最大大小（MB）。超过此限制的请求会返回 HTTP 413。设为 `0` 可禁用此限制。 | `1024` |
-| `WHISPER_LOCAL_ONLY` | 设为任意非空值（如 `true`）时，禁止所有 HuggingFace 模型下载。适用于预先缓存模型的离线或隔离网络部署。 | *（未设置）* |
+| `WHISPER_LOCAL_ONLY` | 设为任意非空值（如 `true`）时，禁止 HuggingFace 和说话人分离 ONNX 模型的自动下载。适用于预先缓存模型的离线或隔离网络部署。 | *（未设置）* |
 | `WHISPER_WORD_TIMESTAMPS` | 设为 `true` 时，全局启用词级时间戳。`verbose_json` 输出将包含顶层 `words` 数组，含每个词的起止时间和置信度。也可通过 `timestamp_granularities[]=word` 按请求启用。 | *（未设置）* |
 | `WHISPER_DIARIZATION` | 设为 `true` 启用说话人分离，识别每个片段中的说话人。使用 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 和 pyannote segmentation-3.0 ONNX 模型（使用默认嵌入模型时约 46 MB，首次使用时自动下载）。不支持流式模式。 | *（未设置）* |
 | `WHISPER_DIARIZE_EMBEDDING_MODEL` | 说话人嵌入模型文件名，取自 sherpa-onnx [speaker-recongition-models](https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models) 发布。默认模型使用中文普通话训练；英语音频可考虑 `wespeaker_en_voxceleb_resnet34_LM.onnx` 或 `nemo_en_titanet_large.onnx`。参见[说话人分离](#说话人分离)。 | `3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx` |
@@ -216,7 +216,7 @@ CPU 镜像支持 `linux/amd64` 和 `linux/arm64`。`:cuda` 标签仅支持 `linu
 
 这些设置的值可包含首尾 ASCII 空白，以及最多一对匹配的外层引号。空值使用默认值。布尔值接受 `true`/`false`，不区分 ASCII 字母大小写；整数必须使用 ASCII 数字，且不能包含正负号或前导零。非空无效值会在模型加载前阻止启动。
 
-绑定挂载的 `api_server.py` 会覆盖镜像内置的 API。移除该挂载可使用内置 API；若需保留自定义版本，请在升级时同步更新。
+绑定挂载的 `api_server.py` 会覆盖镜像内置的 API。移除该挂载可使用内置 API；若需保留自定义版本，请在升级时同步更新。手动替换脚本时，请使用同一版本的 `api_server.py`、`diarizer.py` 和 `diarization_models.py`。
 
 修改绑定挂载的 `/whisper.env` 后，请重启容器。如果容器仍读取到旧文件内容，请仅重建该容器。更改 Docker/Compose 容器环境变量或镜像时，需要重建容器，并保留原数据卷及 Compose 项目。单纯重启不会应用这些变更。
 
@@ -778,7 +778,23 @@ WHISPER_DIARIZE_EMBEDDING_MODEL=wespeaker_en_voxceleb_resnet34_LM.onnx
 
 英语训练的选项包括 `wespeaker_en_voxceleb_resnet34_LM.onnx`（约 27 MB）和 `nemo_en_titanet_large.onnx`（约 101 MB）。嵌入模型文件的大小随所选模型而变化；这些大小不包括共享分割模型（约 6 MB）。没有适用于所有录音的最佳模型，请用自己的音频比较效果。请使用项目维护的允许列表中支持的确切 `.onnx` 文件名，并注意区分大小写。无法识别的非空值会在加载模型前阻止启动，即使未启用说话人分离也是如此。该值可包含首尾 ASCII 空白，以及最多一对匹配的外层引号。
 
-所选模型会在首次使用时下载，并缓存在 `/var/lib/whisper` 数据卷中，与之前使用过的模型并存。`whisper_manage --downloaddiarize` 会预下载容器启动时配置的模型。聚类阈值与模型相关：切换模型后，请重新调整 `WHISPER_DIARIZE_THRESHOLD` 或设置 `WHISPER_DIARIZE_NUM_SPEAKERS`。未设置或为空时保持默认模型，现有缓存和阈值不受影响。
+所选模型会在首次使用时下载，并缓存在 `/var/lib/whisper` 数据卷中，与之前使用过的模型并存。`whisper_manage --downloaddiarize` 会预下载容器启动时配置的模型。聚类阈值与模型相关：切换模型后，请重新调整 `WHISPER_DIARIZE_THRESHOLD` 或设置 `WHISPER_DIARIZE_NUM_SPEAKERS`。未设置或为空时保持默认模型，现有缓存文件名和阈值不受影响。
+
+**模型校验：** 说话人分离 ONNX 模型会在处理管道加载时，按固定的预期文件大小和 SHA-256 哈希值进行校验，已有缓存文件也包括在内。通过校验的缓存文件会直接复用，无需重新下载。未通过校验的现有缓存文件会被保留，日志中会指出对应文件。请将该文件移走，再在允许下载的情况下重启，以获取通过校验的副本。校验、下载或模型加载失败时，会记录警告并禁用说话人分离，转录仍可使用。新下载的模型在存入正式缓存前也会经过校验；未完成或失败的下载不会被使用。支持通过符号链接使用模型文件及现有分割模型目录。链接指向的模型必须是普通文件，并通过相同校验。失效链接或无效目标会被保留，并在日志中报告；请修复链接或其目标，或将对应缓存项移走后重试。
+
+启用说话人分离且允许自动下载时，容器和 Colab 的启动等待时间会涵盖两个 ONNX 模型的下载及重试。仅使用 Whisper 或处于离线模式时，等待上限为五分钟。如果服务器进程退出，会提前停止等待。
+
+如果之前曾用其他权重替换默认嵌入文件，请将其移至对应的受支持文件名，并显式选择该模型。切换回默认模型前，请恢复或重新下载官方默认权重。
+
+**离线兼容性变化：** `WHISPER_LOCAL_ONLY` 现在还会阻止说话人分离 ONNX 模型的自动下载，不再仅限于 HuggingFace 下载。启用离线模式前，请预先缓存分割模型和选中的嵌入模型。显式执行 `whisper_manage --downloaddiarize` 仍允许预先下载 ONNX 模型；Whisper 的 `--downloadmodel` 命令保留现有的离线检查。例如：
+
+```bash
+docker exec whisper whisper_manage --downloaddiarize wespeaker_en_voxceleb_resnet34_LM.onnx
+```
+
+不提供参数时，使用容器启动时保存的模型；没有保存的选择时使用现有默认模型。预先下载不会改变当前使用的模型。请按环境变量的重启/重建说明应用选择更改，并保留模型数据卷以便回滚。
+
+支持的权重来自 [sherpa-onnx 上游模型发布](https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models)。模型权重遵循各自的上游许可证，与 ScribeCrate 的 MIT 许可证分开。
 
 ## 使用计数
 

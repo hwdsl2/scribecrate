@@ -201,7 +201,7 @@ CPU 映像支援 `linux/amd64` 和 `linux/arm64`。`:cuda` 標籤僅支援 `linu
 | `WHISPER_CONDITION_ON_PREVIOUS_TEXT` | 使用前一視窗的文字作為解碼上下文。設為 `false` 可能減少重複回饋循環，但也可能降低視窗間的一致性。 | `true` |
 | `WHISPER_NO_REPEAT_NGRAM_SIZE` | 限制解碼中的重複 token n-gram。`0` 表示停用；接受 `0` 至 `2147483647` 的標準十進位整數。n-gram 是模型 token 的序列，不一定對應完整的單字。 | `0` |
 | `WHISPER_MAX_UPLOAD_MB` | 上傳音訊檔案的最大大小（MB）。超過此限制的請求會返回 HTTP 413。設為 `0` 可停用此限制。 | `1024` |
-| `WHISPER_LOCAL_ONLY` | 設為任意非空值（如 `true`）時，停用所有 HuggingFace 模型下載。適用於預先快取模型的離線或隔離網路部署。 | *（未設定）* |
+| `WHISPER_LOCAL_ONLY` | 設為任意非空值（如 `true`）時，停用 HuggingFace 和說話人分離 ONNX 模型的自動下載。適用於預先快取模型的離線或隔離網路部署。 | *（未設定）* |
 | `WHISPER_WORD_TIMESTAMPS` | 設為 `true` 時，全域啟用詞級時間戳。`verbose_json` 輸出將包含頂層 `words` 陣列，含每個詞的起止時間和置信度。也可透過 `timestamp_granularities[]=word` 按請求啟用。 | *（未設定）* |
 | `WHISPER_DIARIZATION` | 設為 `true` 啟用說話人分離，識別每個片段中的說話人。使用 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 和 pyannote segmentation-3.0 ONNX 模型（使用預設嵌入模型時約 46 MB，首次使用時自動下載）。不支援串流模式。 | *（未設定）* |
 | `WHISPER_DIARIZE_EMBEDDING_MODEL` | 說話人嵌入模型檔名，取自 sherpa-onnx [speaker-recongition-models](https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models) 發布。預設模型使用中文普通話訓練；英語音訊可考慮 `wespeaker_en_voxceleb_resnet34_LM.onnx` 或 `nemo_en_titanet_large.onnx`。參見[說話人分離](#說話人分離)。 | `3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx` |
@@ -216,7 +216,7 @@ CPU 映像支援 `linux/amd64` 和 `linux/arm64`。`:cuda` 標籤僅支援 `linu
 
 這些設定的值可包含首尾 ASCII 空白，以及最多一對相符的外層引號。空值使用預設值。布林值接受 `true`/`false`，不區分 ASCII 字母大小寫；整數必須使用 ASCII 數字，且不能包含正負號或前置零。非空無效值會在模型載入前阻止啟動。
 
-綁定掛載的 `api_server.py` 會覆寫映像內建的 API。移除該掛載可使用內建 API；若需保留自訂版本，請在升級時同步更新。
+綁定掛載的 `api_server.py` 會覆寫映像內建的 API。移除該掛載可使用內建 API；若需保留自訂版本，請在升級時同步更新。手動替換指令碼時，請使用同一版本的 `api_server.py`、`diarizer.py` 和 `diarization_models.py`。
 
 修改綁定掛載的 `/whisper.env` 後，請重新啟動容器。如果容器仍讀取到舊檔案內容，請僅重建該容器。變更 Docker/Compose 容器環境變數或映像時，需要重建容器，並保留原資料卷及 Compose 專案。單純重新啟動不會套用這些變更。
 
@@ -778,7 +778,23 @@ WHISPER_DIARIZE_EMBEDDING_MODEL=wespeaker_en_voxceleb_resnet34_LM.onnx
 
 英語訓練的選項包括 `wespeaker_en_voxceleb_resnet34_LM.onnx`（約 27 MB）和 `nemo_en_titanet_large.onnx`（約 101 MB）。嵌入模型檔案的大小隨所選模型而變化；這些大小不包括共用分割模型（約 6 MB）。沒有適用於所有錄音的最佳模型，請用自己的音訊比較效果。請使用專案維護的允許清單中支援的確切 `.onnx` 檔名，並注意區分大小寫。無法辨識的非空值會在載入模型前阻止啟動，即使未啟用說話人分離也是如此。該值可包含首尾 ASCII 空白，以及最多一對相符的外層引號。
 
-所選模型會在首次使用時下載，並快取在 `/var/lib/whisper` 資料卷中，與先前使用過的模型並存。`whisper_manage --downloaddiarize` 會預先下載容器啟動時設定的模型。聚類閾值與模型相關：切換模型後，請重新調整 `WHISPER_DIARIZE_THRESHOLD` 或設定 `WHISPER_DIARIZE_NUM_SPEAKERS`。未設定或為空時保持預設模型，現有快取和閾值不受影響。
+所選模型會在首次使用時下載，並快取在 `/var/lib/whisper` 資料卷中，與先前使用過的模型並存。`whisper_manage --downloaddiarize` 會預先下載容器啟動時設定的模型。聚類閾值與模型相關：切換模型後，請重新調整 `WHISPER_DIARIZE_THRESHOLD` 或設定 `WHISPER_DIARIZE_NUM_SPEAKERS`。未設定或為空時保持預設模型，現有快取檔案名稱和閾值不受影響。
+
+**模型驗證：** 說話人分離 ONNX 模型會在處理管線載入時，依固定的預期檔案大小和 SHA-256 雜湊值進行驗證，既有快取檔案也包含在內。通過驗證的快取檔案會直接重複使用，無需重新下載。未通過驗證的既有快取檔案會被保留，日誌中會指出對應檔案。請將該檔案移走，再於允許下載的情況下重新啟動，以取得通過驗證的副本。驗證、下載或模型載入失敗時，會記錄警告並停用說話人分離，轉錄仍可使用。新下載的模型在存入正式快取前也會經過驗證；未完成或失敗的下載不會被使用。支援透過符號連結使用模型檔案及既有分割模型目錄。連結指向的模型必須是一般檔案，並通過相同驗證。失效連結或無效目標會被保留，並在日誌中回報；請修復連結或其目標，或將對應快取項目移走後重試。
+
+啟用說話人分離且允許自動下載時，容器和 Colab 的啟動等待時間會涵蓋兩個 ONNX 模型的下載及重試。僅使用 Whisper 或處於離線模式時，等待上限為五分鐘。如果伺服器處理程序結束，會提前停止等待。
+
+如果之前曾用其他權重替換預設嵌入檔案，請將其移至對應的受支援檔案名稱，並明確選擇該模型。切換回預設模型前，請還原或重新下載官方預設權重。
+
+**離線相容性變更：** `WHISPER_LOCAL_ONLY` 現在也會阻止說話人分離 ONNX 模型的自動下載，不再僅限於 HuggingFace 下載。啟用離線模式前，請預先快取分割模型和選中的嵌入模型。明確執行 `whisper_manage --downloaddiarize` 仍允許預先下載 ONNX 模型；Whisper 的 `--downloadmodel` 指令保留既有的離線檢查。例如：
+
+```bash
+docker exec whisper whisper_manage --downloaddiarize wespeaker_en_voxceleb_resnet34_LM.onnx
+```
+
+不提供參數時，使用容器啟動時儲存的模型；沒有儲存的選擇時使用現有預設模型。預先下載不會改變目前使用的模型。請依環境變數的重新啟動/重建說明套用選擇變更，並保留模型資料卷以便回復。
+
+支援的權重來自 [sherpa-onnx 上游模型發布](https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models)。模型權重遵循各自的上游授權條款，與 ScribeCrate 的 MIT 授權條款分開。
 
 ## 使用計數
 
