@@ -41,6 +41,10 @@ these tests do not prove that any setting eliminates every hallucination.
 
 ## Diarization thread checks
 
+`test_diarization_embedding_model.py` covers the allowlist/default, normalization,
+early startup rejection, shell/Python parity, URL encoding, cache reuse and
+selection propagation. Its optional runtime dependencies are stubbed.
+
 `test_diarization_threads.py` covers strict startup validation, inheritance,
 direct-Python legacy fallback, disabled-feature isolation, shell export/parsing
 parity, both native model arguments and the helper's one-thread compatibility
@@ -72,6 +76,20 @@ the reusable test workflows, and test-only changes do not trigger publishing.
 The CPU diarization startup also checks plain bind-mounted assignments and
 env-file precedence: an empty file override replaces container value `1` and
 inherits the file's `WHISPER_THREADS=2`. The CUDA startup checks explicit `1`.
+The mounted file also selects WeSpeaker over a conflicting container TitaNet
+setting. CPU jobs check the live server log, saved selection and selected cache,
+then pass WeSpeaker explicitly into the native helper and verify its result.
+Docker exec processes do not inherit exports made inside the entrypoint.
+The management command is checked against the saved selection while the original
+container environment still names TitaNet. The CUDA job retains default-model
+coverage; none of these checks rank model accuracy.
+
+`test_colab_configuration.py` runs configuration/environment-building cells with
+GPU detection and downloads mocked. It checks unchanged defaults, embedding
+choices, automatic speaker counts, threshold forwarding, and that notebook
+downloads cover repository-local runtime imports. It does not start a server or
+establish a successful hosted Colab/GPU run. For a pre-merge hosted smoke check,
+use the candidate commit's runtime scripts rather than the current main scripts.
 
 ### Public diarization fixture
 

@@ -8,7 +8,9 @@ on:
       - 'api_server.py'
       - 'diarizer.py'
       - 'run.sh'
+      - 'manage.sh'
       - 'Dockerfile*'
+      - 'notebooks/colab_demo.ipynb'
       - 'whisper.env.example'
   push:
     branches: [main]
@@ -21,7 +23,9 @@ on:
       - 'api_server.py'
       - 'diarizer.py'
       - 'run.sh'
+      - 'manage.sh'
       - 'Dockerfile*'
+      - 'notebooks/colab_demo.ipynb'
       - 'whisper.env.example'
 
 permissions:

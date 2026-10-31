@@ -50,7 +50,8 @@ jobs:
           if [ "$TEST_ID" = "with-diarize" ]; then
             # A plain file's empty override must beat container env and inherit
             # the file's Whisper thread count, without requiring export lines.
-            printf '\nWHISPER_THREADS=2\nWHISPER_DIARIZATION=true\nWHISPER_DIARIZE_THREADS=\n' >> whisper.env.example
+            # Its embedding selection must also override the container setting.
+            printf '\nWHISPER_THREADS=2\nWHISPER_DIARIZATION=true\nWHISPER_DIARIZE_THREADS=\nWHISPER_DIARIZE_EMBEDDING_MODEL=wespeaker_en_voxceleb_resnet34_LM.onnx\n' >> whisper.env.example
           fi
           if [ "$TEST_ID" = "no-env" ]; then
             # Invalid values fail before creating state or downloading models.
@@ -89,6 +90,7 @@ jobs:
               -e WHISPER_MODEL=tiny \
               -e WHISPER_DIARIZATION=true \
               -e WHISPER_DIARIZE_THREADS=1 \
+              -e WHISPER_DIARIZE_EMBEDDING_MODEL=nemo_en_titanet_large.onnx \
               -p 9000:9000/tcp \
               -d whisper-test
           elif [ "$TEST_ID" = "with-env" ]; then
@@ -324,6 +326,12 @@ jobs:
               exit 1
             fi
             docker logs "$TEST_ID" 2>&1 | grep -q 'Diarization enabled'
+            expected_embedding=wespeaker_en_voxceleb_resnet34_LM.onnx
+            docker logs "$TEST_ID" 2>&1 | grep -F "Diarization embedding model: $expected_embedding" >/dev/null
+            saved_embedding=$(docker exec "$TEST_ID" cat /var/lib/whisper/.diarize_embedding_model)
+            [ "$saved_embedding" = "$expected_embedding" ] || { echo "Incorrect saved embedding model"; exit 1; }
+            docker exec "$TEST_ID" test -f "/var/lib/whisper/$expected_embedding"
+            docker exec "$TEST_ID" test ! -f /var/lib/whisper/nemo_en_titanet_large.onnx
 
             # Public two-speaker speech, pinned and checksum-verified. Never
             # allow VAD-filtered silence to skip the diarization assertions.
@@ -340,13 +348,21 @@ jobs:
               'import sys,json; d=json.load(sys.stdin); assert d["text"].strip() and d["segments"]; assert all(s.get("speaker", "").startswith("SPEAKER_") for s in d["segments"])'
             docker logs "$TEST_ID" 2>&1 | grep 'Diarization enabled (num_threads=2 per model)' >/dev/null
             docker cp .github/workflows/tests/check_diarization.py "$TEST_ID:/tmp/check_diarization.py"
-            timeout 900 docker exec "$TEST_ID" python3 /tmp/check_diarization.py \
+            # docker exec does not inherit exports from the entrypoint process.
+            # Pass the expected mounted-file selection explicitly to the helper.
+            timeout 900 docker exec -e "WHISPER_DIARIZE_EMBEDDING_MODEL=$expected_embedding" \
+              "$TEST_ID" python3 /tmp/check_diarization.py \
               --api /opt/src/api_server.py --audio /tmp/test_diarize.wav \
               --cache /var/lib/whisper --output /tmp/diarization-results.json
             docker cp "$TEST_ID:/tmp/diarization-results.json" "$RUNNER_TEMP/diarization-results.json"
+            python3 -c 'import json,sys; assert json.load(open(sys.argv[1]))["embedding_model"] == sys.argv[2]' \
+              "$RUNNER_TEMP/diarization-results.json" "$expected_embedding"
 
             # Test whisper_manage --downloaddiarize
-            docker exec "$TEST_ID" whisper_manage --downloaddiarize
+            manage_output=$(docker exec "$TEST_ID" whisper_manage --downloaddiarize)
+            printf '%s\n' "$manage_output"
+            printf '%s\n' "$manage_output" | grep -F "Speaker embedding model: $expected_embedding" >/dev/null
+            printf '%s\n' "$manage_output" | grep -F 'Embedding model already exists.' >/dev/null
           fi
 
           docker restart "$TEST_ID"
