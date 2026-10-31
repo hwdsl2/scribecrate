@@ -203,7 +203,7 @@ CPU 镜像支持 `linux/amd64` 和 `linux/arm64`。`:cuda` 标签仅支持 `linu
 | `WHISPER_MAX_UPLOAD_MB` | 上传音频文件的最大大小（MB）。超过此限制的请求会返回 HTTP 413。设为 `0` 可禁用此限制。 | `1024` |
 | `WHISPER_LOCAL_ONLY` | 设为任意非空值（如 `true`）时，禁止所有 HuggingFace 模型下载。适用于预先缓存模型的离线或隔离网络部署。 | *（未设置）* |
 | `WHISPER_WORD_TIMESTAMPS` | 设为 `true` 时，全局启用词级时间戳。`verbose_json` 输出将包含顶层 `words` 数组，含每个词的起止时间和置信度。也可通过 `timestamp_granularities[]=word` 按请求启用。 | *（未设置）* |
-| `WHISPER_DIARIZATION` | 设为 `true` 启用说话人分离，识别每个片段中的说话人。使用 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 和 pyannote segmentation-3.0 ONNX 模型（约 45 MB，首次使用时自动下载）。不支持流式模式。 | *（未设置）* |
+| `WHISPER_DIARIZATION` | 设为 `true` 启用说话人分离，识别每个片段中的说话人。使用 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 和 pyannote segmentation-3.0 ONNX 模型（使用默认嵌入模型时约 46 MB，首次使用时自动下载）。不支持流式模式。 | *（未设置）* |
 | `WHISPER_DIARIZE_EMBEDDING_MODEL` | 说话人嵌入模型文件名，取自 sherpa-onnx [speaker-recongition-models](https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models) 发布。默认模型使用中文普通话训练；英语音频可考虑 `wespeaker_en_voxceleb_resnet34_LM.onnx` 或 `nemo_en_titanet_large.onnx`。参见[说话人分离](#说话人分离)。 | `3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx` |
 | `WHISPER_DIARIZE_NUM_SPEAKERS` | 说话人确切数量（如已知）。提高聚类准确性。设为 `-1` 或留空表示自动检测。 | `-1` |
 | `WHISPER_DIARIZE_THREADS` | 分割和嵌入模型各自使用的 CPU 线程数。接受 `1` 至 `2147483647` 的规范十进制整数；未设置或为空时继承 `WHISPER_THREADS`。 | `WHISPER_THREADS` |
@@ -717,7 +717,7 @@ ScribeCrate 可作为更广泛的自托管 AI 设置中的语音转文字服务�
 WHISPER_DIARIZATION=true
 ```
 
-ONNX 模型（共约 45 MB）在首次使用时自动下载并缓存到 `/var/lib/whisper` 数据卷。预先下载：
+ONNX 模型（使用默认嵌入模型时共约 46 MB）在首次使用时自动下载并缓存到 `/var/lib/whisper` 数据卷。预先下载：
 
 ```bash
 docker exec whisper whisper_manage --downloaddiarize
@@ -776,7 +776,7 @@ docker exec whisper whisper_manage --downloaddiarize
 WHISPER_DIARIZE_EMBEDDING_MODEL=wespeaker_en_voxceleb_resnet34_LM.onnx
 ```
 
-英语训练的选项包括 `wespeaker_en_voxceleb_resnet34_LM.onnx`（约 27 MB）和 `nemo_en_titanet_large.onnx`（约 101 MB）。没有一个模型适用于所有录音，请用你自己的音频进行比较。请使用发布中完整且区分大小写的 `.onnx` 文件名。无法识别的非空值会在加载模型前阻止启动，即使未启用说话人分离也是如此。该值可包含首尾 ASCII 空白，以及最多一对匹配的外层引号。
+英语训练的选项包括 `wespeaker_en_voxceleb_resnet34_LM.onnx`（约 27 MB）和 `nemo_en_titanet_large.onnx`（约 101 MB）。嵌入模型文件的大小随所选模型而变化；这些大小不包括共享分割模型（约 6 MB）。没有适用于所有录音的最佳模型，请用自己的音频比较效果。请使用项目维护的允许列表中支持的确切 `.onnx` 文件名，并注意区分大小写。无法识别的非空值会在加载模型前阻止启动，即使未启用说话人分离也是如此。该值可包含首尾 ASCII 空白，以及最多一对匹配的外层引号。
 
 所选模型会在首次使用时下载，并缓存在 `/var/lib/whisper` 数据卷中，与之前使用过的模型并存。`whisper_manage --downloaddiarize` 会预下载容器启动时配置的模型。聚类阈值与模型相关：切换模型后，请重新调整 `WHISPER_DIARIZE_THRESHOLD` 或设置 `WHISPER_DIARIZE_NUM_SPEAKERS`。未设置或为空时保持默认模型，现有缓存和阈值不受影响。
 
