@@ -25,7 +25,7 @@ ScribeCrate предоставляет API для преобразования �
 
 Также доступен в составе [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack/blob/main/docs/README-ru.md), который развёртывает полный AI-стек на собственном сервере одной командой.
 
-> 📘 [The Self-Hosted AI Builder’s Guide](https://books2read.com/aiguide?store=amazon): практическое руководство по созданию, защите и эксплуатации собственного приватного ИИ-стека.
+> 📘 **The Self-Hosted AI Builder’s Guide** ([электронная книга](https://books2read.com/aiguide?store=amazon) · [книга в мягкой обложке](https://books2read.com/aiguide?store=amazon-paperback&format=PAPERBACK)): практическое руководство по созданию, защите и эксплуатации собственного приватного ИИ-стека.
 
 **Попробовать онлайн:** [Открыть в Colab](https://selfhostedaistack.com/scribecrate-notebook) (Docker и локальная установка не требуются)
 

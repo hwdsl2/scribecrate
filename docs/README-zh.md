@@ -25,7 +25,7 @@ ScribeCrate 是一个自托管的语音转文字 API，用于转录音频、生�
 
 也可作为 [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack/blob/main/docs/README-zh.md) 的一部分使用，一条命令即可部署完整的自托管 AI 技术栈。
 
-> 📘 [The Self-Hosted AI Builder’s Guide](https://books2read.com/aiguide?store=amazon) 是一本关于构建、保护和运维自己的私有 AI 技术栈的实用指南。
+> 📘 **The Self-Hosted AI Builder’s Guide**（[电子书](https://books2read.com/aiguide?store=amazon) · [平装书](https://books2read.com/aiguide?store=amazon-paperback&format=PAPERBACK)）是一本关于构建、保护和运维自己的私有 AI 技术栈的实用指南。
 
 **在线试用：** [在 Colab 中打开](https://selfhostedaistack.com/scribecrate-notebook)（无需 Docker 或本地安装）
 
