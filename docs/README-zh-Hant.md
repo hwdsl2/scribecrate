@@ -122,7 +122,7 @@ ScribeCrate Live 是獨立部署的伺服器，由 [WhisperLive](https://github.
 | **協定** | HTTP REST | WebSocket（串流）+ HTTP REST |
 | **延遲** | 處理完成後回傳 JSON；SSE 逐段回傳 | 逐步回傳分段結果 |
 | **適合** | 會議錄音、上傳的音訊檔案 | 瀏覽器擷取、RTSP 串流、即時字幕 |
-| **映像大小** | ~190 MB（`:cuda` 約 3.1 GB） | ~750 MB（`:cuda` 約 4.5 GB） |
+| **映像大小** | ~190 MB（`:cuda` 約 3.1 GB） | ~580 MB（`:cuda` 約 4.3 GB） |
 
 ## 社群
 
