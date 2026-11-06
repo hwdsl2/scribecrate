@@ -23,17 +23,11 @@ ScribeCrate 是一個自託管的語音轉文字 API，用於轉錄音訊、產�
 - **離線執行：** 使用預先快取的模型和 `WHISPER_LOCAL_ONLY`，無需存取網際網路即可執行。
 - **自動建置：** 映像透過 [GitHub Actions](https://github.com/hwdsl2/scribecrate/actions) 自動建置和發佈，建置工作流程公開可查。
 
+**線上試用：** [在 Colab 中開啟](https://selfhostedaistack.com/scribecrate-notebook)（無需 Docker 或本機安裝）
+
 也可作為 [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack/blob/main/docs/README-zh-Hant.md) 的一部分使用，一條命令即可部署完整的自託管 AI 技術堆疊。
 
 > 📘 **The Self-Hosted AI Builder’s Guide**（[電子書](https://books2read.com/aiguide?store=amazon) · [平裝書](https://books2read.com/aiguide?store=amazon-paperback&format=PAPERBACK)）是一本關於建置、保護和維運自己的私有 AI 技術堆疊的實用指南。
-
-**線上試用：** [在 Colab 中開啟](https://selfhostedaistack.com/scribecrate-notebook)（無需 Docker 或本機安裝）
-
-**相關 AI 服務：**
-
-- **語音：** [ScribeCrate Live](https://github.com/hwdsl2/scribecrate-live/blob/main/docs/README-zh-Hant.md)、[SpeakCrate](https://github.com/hwdsl2/speakcrate/blob/main/docs/README-zh-Hant.md)
-- **文件與檢索：** [ParseCrate](https://github.com/hwdsl2/parsecrate/blob/main/docs/README-zh-Hant.md)、[EmbedCrate](https://github.com/hwdsl2/embedcrate/blob/main/docs/README-zh-Hant.md)
-- **模型與閘道：** [InferCrate](https://github.com/hwdsl2/infercrate/blob/main/docs/README-zh-Hant.md)、[GatewayCrate](https://github.com/hwdsl2/gatewaycrate/blob/main/docs/README-zh-Hant.md)、[UplinkCrate](https://github.com/hwdsl2/uplinkcrate/blob/main/docs/README-zh-Hant.md)
 
 ## 快速開始
 
@@ -705,6 +699,12 @@ docker rm -f whisper
 ScribeCrate 可作為更廣泛的自託管 AI 設定中的語音轉文字服務。
 
 如需完整和輕量級 Docker Compose 技術堆疊、手動 `docker run` 範例，以及結合 SpeakCrate、EmbedCrate、GatewayCrate、InferCrate、ParseCrate 和 UplinkCrate 的語音/RAG/MCP 流水線範例，請參閱 [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack/blob/main/docs/README-zh-Hant.md)。
+
+**相關 AI 服務：**
+
+- **語音：** [ScribeCrate Live](https://github.com/hwdsl2/scribecrate-live/blob/main/docs/README-zh-Hant.md)、[SpeakCrate](https://github.com/hwdsl2/speakcrate/blob/main/docs/README-zh-Hant.md)
+- **文件與檢索：** [ParseCrate](https://github.com/hwdsl2/parsecrate/blob/main/docs/README-zh-Hant.md)、[EmbedCrate](https://github.com/hwdsl2/embedcrate/blob/main/docs/README-zh-Hant.md)
+- **模型與閘道：** [InferCrate](https://github.com/hwdsl2/infercrate/blob/main/docs/README-zh-Hant.md)、[GatewayCrate](https://github.com/hwdsl2/gatewaycrate/blob/main/docs/README-zh-Hant.md)、[UplinkCrate](https://github.com/hwdsl2/uplinkcrate/blob/main/docs/README-zh-Hant.md)
 
 ## 說話人分離
 
