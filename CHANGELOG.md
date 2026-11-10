@@ -2,6 +2,13 @@
 
 Notable changes to ScribeCrate are documented here.
 
+## 2026-11-10
+
+### Changed
+
+- Expose `WHISPER_DIARIZE_THREADS` in the Colab demo, defaulting to inheritance
+  from `WHISPER_THREADS`; clarify CPU usage, startup downloads and rerun instructions.
+
 ## 2026-10-31
 
 Release: `2026.10.3`
