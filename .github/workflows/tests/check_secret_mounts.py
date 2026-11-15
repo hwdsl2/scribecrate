@@ -30,15 +30,16 @@ def main():
             path = Path(directory)
             (path / "key").write_bytes(b"synthetic-mount-test\r\n")
             (path / "key").chmod(0o444)
-            config = {"services": {"check": {"image": image,
-                      "entrypoint": command, "environment": {
+            config = {"services": {"check": {"image": image, "environment": {
                           "TEST_SECRET_FILE": "/run/secrets/test_secret"},
                       "secrets": ["test_secret"]}},
                       "secrets": {"test_secret": {"file": "./key"}}}
             (path / "compose.json").write_text(json.dumps(config))
             base = [engine, "compose", "-p", name, "-f", str(path / "compose.json")]
             try:
-                run(base + ["up", "--abort-on-container-exit", "--exit-code-from", "check"])
+                # CLI arguments bypass Compose interpolation of the shell's $ references.
+                run(base + ["run", "--rm", "--no-deps", "--entrypoint", command[0],
+                            "check", *command[1:]])
             finally:
                 run(base + ["down", "--volumes", "--remove-orphans"])
     elif engine == "podman":

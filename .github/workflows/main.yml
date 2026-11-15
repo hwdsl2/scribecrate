@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/main.yml'
+      - '.github/workflows/tests/check_secret_mounts.py'
       - '.github/workflows/buildx.yml'
       - '.github/workflows/buildx-cuda.yml'
       - '.dockerignore'

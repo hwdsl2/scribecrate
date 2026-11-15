@@ -3,14 +3,18 @@
 Only launcher setup fragments execute, with every writable absolute path mapped
 to a disposable fixture. ROLLOUT_SOURCE_REF can compare a pre-change revision.
 """
+import json
 import os
 from pathlib import Path
 import re
+import runpy
 import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[3]
 CONFIG = {
@@ -316,6 +320,116 @@ class ParserTests(unittest.TestCase):
             self.assertNotEqual(resolve({"TEST_SECRET_FILE": str(link)}).returncode, 0)
             os.mkfifo(path)
             self.assertNotEqual(resolve({"TEST_SECRET_FILE": str(path)}).returncode, 0)
+
+
+@unittest.skipIf(bool(os.getenv("ROLLOUT_SOURCE_REF")), "Mount-checker candidate only")
+class SecretMountTests(unittest.TestCase):
+    def invoke_checker(self, engine, probe, calls):
+        checker = runpy.run_path(str(ROOT / ".github/workflows/tests/check_secret_mounts.py"))
+
+        def engine_call(args, **kwargs):
+            calls.append(list(args))
+            if args[:2] == ["docker", "compose"]:
+                if "down" not in args:
+                    config_path = Path(args[args.index("-f") + 1])
+                    return probe(args, json.loads(config_path.read_text()), config_path.parent / "key")
+            elif args[:3] == ["podman", "secret", "create"]:
+                self.assertEqual(kwargs["input"], b"synthetic-mount-test\n")
+            elif args[:2] == ["podman", "run"]:
+                return probe(args, None, None)
+            elif args[:2] != ["podman", "rm"] and args[:3] != ["podman", "secret", "rm"]:
+                self.fail(f"Unexpected engine command: {args}")
+            return subprocess.CompletedProcess(args, 0)
+
+        with mock.patch.object(sys, "argv", ["check_secret_mounts.py", engine, "candidate:local"]), \
+                mock.patch.object(subprocess, "run", side_effect=engine_call):
+            checker["main"]()
+
+    def assert_cleanup(self, engine, calls):
+        if engine == "docker":
+            self.assertEqual(calls[-1][-3:], ["down", "--volumes", "--remove-orphans"])
+        else:
+            self.assertEqual(calls[-2][:3], ["podman", "rm", "-f"])
+            self.assertEqual(calls[-1][:3], ["podman", "secret", "rm"])
+
+    def test_probe_executes_on_both_engine_paths(self):
+        real_run = subprocess.run
+        for engine in ("docker", "podman"):
+            with self.subTest(engine=engine), tempfile.TemporaryDirectory() as directory:
+                native_key = Path(directory) / "native secret"
+                native_key.write_bytes(b"synthetic-mount-test\n")
+                calls = []
+
+                def probe(args, config, key):
+                    if engine == "docker":
+                        self.assertIn("run", args)
+                        self.assertIn("--rm", args)
+                        self.assertIn("--no-deps", args)
+                        self.assertEqual(config["services"]["check"]["secrets"], ["test_secret"])
+                        self.assertEqual(key.stat().st_mode & 0o777, 0o444)
+                    else:
+                        self.assertIn("--rm", args)
+                        self.assertIn("mode=0444", args[args.index("--secret") + 1])
+                        key = native_key
+                    entrypoint = args[args.index("--entrypoint") + 1]
+                    command = args[args.index("candidate:local") + 1:] if engine == "podman" else \
+                        args[args.index("--entrypoint") + 3:]
+                    self.assertEqual(entrypoint, "bash")
+                    self.assertEqual(command[0], "-c")
+                    shell = command[1].replace("/opt/src/run.sh", shlex.quote(str(ROOT / "run.sh")))
+                    result = real_run([entrypoint, "-c", shell], capture_output=True, timeout=5,
+                                      env={"PATH": os.environ["PATH"], "TEST_SECRET_FILE": str(key)})
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    return result
+
+                self.invoke_checker(engine, probe, calls)
+                self.assert_cleanup(engine, calls)
+
+    def test_compose_config_ignores_host_shell_variables(self):
+        binary = os.environ.get("COMPOSE_TEST_BINARY")
+        compose = [binary] if binary else ["docker", "compose"] if shutil.which("docker") else None
+        if compose is None:
+            self.skipTest("Compose CLI required; no container engine is needed")
+        real_run = subprocess.run
+        for host_values in ({}, {"helpers": "poison-host-helpers", "TEST_SECRET": "poison-host-secret"}):
+            with self.subTest(host_values=bool(host_values)):
+                calls = []
+
+                def probe(args, config, key):
+                    host_env = os.environ.copy()
+                    for name in ("helpers", "TEST_SECRET"):
+                        host_env.pop(name, None)
+                    host_env.update(host_values)
+                    result = real_run(compose + ["--env-file", os.devnull, "-f",
+                                                str(key.parent / "compose.json"), "config", "--format", "json"],
+                                      env=host_env,
+                                      capture_output=True, text=True, timeout=15)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertNotIn("variable is not set", result.stderr)
+                    self.assertNotIn("poison-host-", result.stdout)
+                    rendered = json.loads(result.stdout)
+                    service = rendered["services"]["check"]
+                    self.assertIsNone(service.get("entrypoint"))
+                    self.assertEqual(service["environment"]["TEST_SECRET_FILE"], "/run/secrets/test_secret")
+                    self.assertEqual(service["secrets"][0]["source"], "test_secret")
+                    self.assertEqual(rendered["secrets"]["test_secret"]["file"], str(key))
+                    return result
+
+                self.invoke_checker("docker", probe, calls)
+                self.assert_cleanup("docker", calls)
+
+    def test_probe_failure_propagates_and_cleans_up(self):
+        for engine in ("docker", "podman"):
+            with self.subTest(engine=engine):
+                calls = []
+
+                def fail_probe(args, config, key):
+                    raise subprocess.CalledProcessError(23, args)
+
+                with self.assertRaises(subprocess.CalledProcessError) as raised:
+                    self.invoke_checker(engine, fail_probe, calls)
+                self.assertEqual(raised.exception.returncode, 23)
+                self.assert_cleanup(engine, calls)
 
 
 if __name__ == "__main__":
