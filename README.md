@@ -247,6 +247,34 @@ docker run \
 
 </details>
 
+## Secret files
+
+Supported optional inputs: `WHISPER_API_KEY_FILE`. Each replaces its matching direct variable. Leave the matching direct variable **unset**; do not assign even an empty value in container configuration or the mounted env file. The mounted env file keeps its existing precedence. Setting both sources, an empty file path or an invalid file stops startup before credential/configuration writes.
+
+**Note:** If the matching direct variable is inherited from `-e` or Compose `environment`, remove its assignment and recreate the container. Alternatively, remove any direct assignment from the bind-mounted `whisper.env`, add the matching `unset` command (for example, `unset WHISPER_API_KEY`) before the `_FILE` assignment, and restart once the updated file is visible. This command works in the shell-sourced bind-mounted file; Docker `--env-file` and Compose `env_file` do not execute shell commands. The workaround leaves the old credential in the container configuration until recreation.
+
+Use a readable, nonempty regular file (a symlink to one is accepted). Paths may contain spaces. Only terminal LF/CRLF sequences are removed; embedded line breaks, lone CR, NUL and other controls are rejected. Bearer tokens may contain ASCII letters, digits and `-._~+/`, with optional trailing `=` padding. External permissions and ownership are unchanged.
+
+See the [opt-in Compose-secret override](docs/examples/compose.secrets.yml). For a local CPU candidate, build the current checkout, then merge the override with your existing configuration:
+
+```bash
+docker build -t scribecrate:secret-files-candidate .
+SECRET_FILE_IMAGE=scribecrate:secret-files-candidate SECRET_FILE_PATH=/absolute/path/to/api-key \
+  docker compose -f docker-compose.yml -f docs/examples/compose.secrets.yml config
+```
+
+Review the merged configuration before starting only the affected service with the same project, volumes and file arguments. Remove its direct-key assignment first. CUDA deployments must use a compatible CUDA build and their existing CUDA Compose file. Older published images may ignore these inputs; select an image containing this implementation. Compose and Podman mounting checks are provided for candidate validation; this source change alone does not establish Podman Compose, Swarm, Kubernetes or GPU validation.
+
+Rotation is startup-based. After making new contents visible, restart the affected container and refresh credential consumers. Changing the container's environment configuration or mounts requires recreation. Atomic replacement of a bind-mounted host file can leave the old inode mounted; verify visibility and recreate the affected container if needed. Keep persistent volumes and backups. Before downgrading, configure a direct/saved credential supported by the older image and verify protected requests with correct, wrong and missing credentials.
+
+File-sourced auth keys are not written to persistent `.api_key` files. Existing saved keys remain available when file mode is removed. Management helpers use a private 0700 directory and atomic 0600 startup snapshot under `/run/whisper-secrets`; `/run` is not necessarily memory-backed. Snapshots are replaced on startup or removed when file mode ends, so source edits/deletion do not change the key reported by `--getkey`. Runtime state is not included in data-volume backups.
+
+File mode requires writable private runtime storage. If you replace `/run` or use a read-only root filesystem, provision the snapshot directory with the service UID and mode 0700.
+
+Upstream processes may still receive the values in environments or arguments; `_FILE` does not provide encryption.
+
+Before removing file mode, configure another credential source. Without a direct or previously saved key, the existing volume can resume legacy no-auth behavior.
+
 ## Using docker-compose
 
 ```bash
