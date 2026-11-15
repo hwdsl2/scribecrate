@@ -159,6 +159,68 @@ fi
 
 WHISPER_API_KEY_WAS_SET=${WHISPER_API_KEY+x}
 
+# Resolve explicit external inputs before normalization or persistent writes.
+# Begin secret-file helpers
+# Optional external inputs only. Legacy saved-key readers remain in the caller.
+
+secret_error() { printf 'Error: %s\n' "$1" >&2; exit 1; }
+
+secret_resolve() {
+  local name="$1" kind="$2" file_name="${1}_FILE" path value LC_ALL=C header_pattern='^[ -~]+$'
+  printf -v "${name}_FROM_FILE" '%s' ''
+  [[ ${!file_name+x} ]] || return 0
+  [[ ! ${!name+x} ]] || secret_error "$file_name conflicts with $name (even when empty)."
+  path=${!file_name}
+  [[ -n "$path" ]] || secret_error "$file_name must name a nonempty file path."
+  [[ -f "$path" && -r "$path" && -s "$path" ]] \
+    || secret_error "$file_name must name a readable, nonempty regular file."
+  # read retains terminal newlines; a successful NUL-delimited read detects NUL
+  # before Bash can silently discard it. Never source or evaluate secret bytes.
+  if IFS= read -r -d '' value < "$path"; then
+    secret_error "$file_name contains a NUL byte."
+  fi
+  while [[ "$value" == *$'\n' ]]; do
+    value=${value%$'\n'}
+    value=${value%$'\r'}
+  done
+  [[ -n "$value" && "$value" != *[[:cntrl:]]* ]] \
+    || secret_error "$file_name must contain one nonempty line without control characters."
+  # Bearer transports use RFC 6750 b64token; passwords and URLs are text.
+  if [[ "$kind" == bearer && ! "$value" =~ ^[A-Za-z0-9._~+/-]+=*$ ]]; then
+    secret_error "$file_name must contain a single HTTP bearer token."
+  fi
+  if [[ "$kind" == header && ( ! "$value" =~ $header_pattern || "$value" == ' '* || "$value" == *' ' ) ]]; then
+    secret_error "$file_name must contain ASCII header data without leading or trailing spaces."
+  fi
+  printf -v "$name" '%s' "$value"
+  printf -v "${name}_FROM_FILE" '%s' 1
+  export "${name?}"
+}
+
+# A private startup snapshot lets docker exec helpers read the running key even
+# after the source changes. The directory is image-owned, outside data volumes.
+# /run is not assumed to be tmpfs. No live rotation or background work occurs.
+secret_snapshot() {
+  local directory="$1" name="$2" value="$3" enabled="$4" temporary
+  if [[ "$enabled" != 1 ]]; then
+    rm -f -- "$directory/$name" || secret_error "Cannot clear previous runtime secret."
+    return 0
+  fi
+  [[ -d "$directory" && ! -L "$directory" ]] \
+    || secret_error "Private runtime secret directory is unavailable."
+  chmod 700 "$directory" || secret_error "Cannot secure runtime secret directory."
+  temporary=$(mktemp "$directory/.secret.XXXXXX") \
+    || secret_error "Cannot prepare runtime secret."
+  if ! printf '%s' "$value" > "$temporary" || ! chmod 600 "$temporary" \
+    || ! mv -f -- "$temporary" "$directory/$name"; then
+    rm -f -- "$temporary"
+    secret_error "Cannot save runtime secret."
+  fi
+}
+# End secret-file helpers
+
+secret_resolve WHISPER_API_KEY bearer
+
 # Read and sanitize environment variables
 WHISPER_MODEL=$(nospaces "$WHISPER_MODEL")
 WHISPER_MODEL=$(noquotes "$WHISPER_MODEL")
@@ -172,8 +234,10 @@ WHISPER_COMPUTE_TYPE=$(nospaces "$WHISPER_COMPUTE_TYPE")
 WHISPER_COMPUTE_TYPE=$(noquotes "$WHISPER_COMPUTE_TYPE")
 WHISPER_THREADS=$(nospaces "$WHISPER_THREADS")
 WHISPER_THREADS=$(noquotes "$WHISPER_THREADS")
-WHISPER_API_KEY=$(nospaces "$WHISPER_API_KEY")
-WHISPER_API_KEY=$(noquotes "$WHISPER_API_KEY")
+if [ "${WHISPER_API_KEY_FROM_FILE:-}" != 1 ]; then
+  WHISPER_API_KEY=$(nospaces "$WHISPER_API_KEY")
+  WHISPER_API_KEY=$(noquotes "$WHISPER_API_KEY")
+fi
 WHISPER_LOG_LEVEL=$(nospaces "$WHISPER_LOG_LEVEL")
 WHISPER_LOG_LEVEL=$(noquotes "$WHISPER_LOG_LEVEL")
 WHISPER_BEAM=$(nospaces "$WHISPER_BEAM")
@@ -383,7 +447,9 @@ report_usage_counts() {
   fi
 }
 
-if [ -n "$WHISPER_API_KEY" ]; then
+if [ "${WHISPER_API_KEY_FROM_FILE:-}" = 1 ]; then
+  : # Keep the existing persistent key for rollback to legacy sources.
+elif [ -n "$WHISPER_API_KEY" ]; then
   printf '%s' "$WHISPER_API_KEY" > "$API_KEY_FILE"
   chmod 600 "$API_KEY_FILE"
 elif [ -z "$WHISPER_API_KEY_WAS_SET" ] && [ -f "$API_KEY_FILE" ]; then
@@ -400,6 +466,8 @@ if [ -n "$WHISPER_API_KEY" ]; then
 else
   printf '%s' "0" > "$AUTH_ENABLED_FILE"
 fi
+
+secret_snapshot /run/whisper-secrets api_key "$WHISPER_API_KEY" "${WHISPER_API_KEY_FROM_FILE:-}"
 
 # Determine server address for display
 public_ip=$(fetch_public_ip) || public_ip=""

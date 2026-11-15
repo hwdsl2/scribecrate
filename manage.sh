@@ -97,6 +97,12 @@ load_config() {
     WHISPER_AUTH_ENABLED=$(cat "$AUTH_ENABLED_FILE")
   fi
 
+  # Read the startup snapshot, never the possibly edited external file.
+  if [ -f /run/whisper-secrets/api_key ]; then
+    WHISPER_AUTH_ENABLED=1
+    WHISPER_API_KEY=$(cat /run/whisper-secrets/api_key) || exiterr "Cannot read active API key."
+  fi
+
   if [ "$WHISPER_AUTH_ENABLED" != 0 ] && [ -z "$WHISPER_API_KEY" ] && [ -f "$API_KEY_FILE" ]; then
     WHISPER_API_KEY=$(cat "$API_KEY_FILE")
   fi
