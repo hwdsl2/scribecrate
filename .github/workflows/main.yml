@@ -1,11 +1,11 @@
 name: build
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
       - '.github/workflows/main.yml'
-      - '.github/workflows/tests/check_secret_mounts.py'
       - '.github/workflows/buildx.yml'
       - '.github/workflows/buildx-cuda.yml'
       - '.dockerignore'
@@ -34,6 +34,7 @@ jobs:
     uses: ./.github/workflows/cuda_test.yml
 
   buildx:
+    if: github.ref == 'refs/heads/main'
     needs: [shellcheck, whisper_test]
     uses: ./.github/workflows/buildx.yml
     secrets:
@@ -44,6 +45,7 @@ jobs:
       BUILD_ONLY: ${{ secrets.BUILD_ONLY }}
 
   buildx-cuda:
+    if: github.ref == 'refs/heads/main'
     needs: [shellcheck, whisper_test, cuda_test]
     uses: ./.github/workflows/buildx-cuda.yml
     secrets:
