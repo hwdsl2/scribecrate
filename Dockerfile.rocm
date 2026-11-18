@@ -1,0 +1,233 @@
+# syntax=docker/dockerfile:1.7
+
+ARG ROCM_VERSION=7.2.1
+ARG CTRANSLATE2_IMAGE=ghcr.io/opennmt/ctranslate2:4.8.2-ubuntu22.04-rocm7.2.1
+ARG ROCM_ARCH=gfx1150
+ARG ROCM_BUILD=source
+
+# This image intentionally supports one GPU ISA only. rocRAND and rocSOLVER ship
+# very large shared objects because their release packages embed kernels for
+# many AMD GPU architectures. CTranslate2's upstream ROCm image is similarly
+# built for several architectures. Rebuild all three with a single target.
+FROM rocm/dev-ubuntu-22.04:${ROCM_VERSION} AS single-arch-builder
+
+ARG ROCM_ARCH
+ARG ROCRAND_COMMIT=13c332b687d173643024b0d8bba5e3e11e57a16b
+ARG ROCSOLVER_COMMIT=00c4838ae8641d367885e221073ca1c6bd3a0e3a
+ARG CTRANSLATE2_COMMIT=1d07cac8ad21cd579f170cca6ce05c56173a0f67
+
+ENV ROCM_PATH=/opt/rocm \
+    ROCM_ROOT=/opt/rocm
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        cmake=3.22.* \
+        git=1:2.34.* \
+        ninja-build=1.10.* \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+
+RUN git clone --filter=blob:none https://github.com/ROCm/rocRAND.git rocrand \
+    && git -C rocrand checkout --detach "${ROCRAND_COMMIT}" \
+    && cmake -S rocrand -B /build/rocrand -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CXX_COMPILER=/opt/rocm/bin/amdclang++ \
+        -DCMAKE_INSTALL_PREFIX="/opt/${ROCM_ARCH}" \
+        -DAMDGPU_TARGETS="${ROCM_ARCH}" \
+        -DGPU_TARGETS="${ROCM_ARCH}" \
+        -DBUILD_BENCHMARK=OFF \
+        -DBUILD_FORTRAN_WRAPPER=OFF \
+        -DBUILD_TEST=OFF \
+    && cmake --build /build/rocrand --parallel \
+    && cmake --install /build/rocrand
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        hipblas-dev=3.2.0.70201-81~22.04 \
+        hipcub-dev=4.2.0.70201-81~22.04 \
+        hiprand-dev=3.1.0.70201-81~22.04 \
+        libfmt-dev=8.1.* \
+        rocblas-dev=5.2.0.70201-81~22.04 \
+        rocprim-dev=4.2.0.70201-81~22.04 \
+        rocthrust-dev=4.2.0.70201-81~22.04 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --filter=blob:none https://github.com/ROCm/rocSOLVER.git rocsolver \
+    && git -C rocsolver checkout --detach "${ROCSOLVER_COMMIT}" \
+    && CXX=/opt/rocm/bin/amdclang++ cmake \
+        -S rocsolver -B /build/rocsolver -G Ninja \
+        --toolchain=/src/rocsolver/toolchain-linux.cmake \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX="/opt/${ROCM_ARCH}" \
+        -DAMDGPU_TARGETS="${ROCM_ARCH}" \
+        -DCMAKE_HIP_ARCHITECTURES="${ROCM_ARCH}" \
+        -DBUILD_CLIENTS_BENCHMARKS=OFF \
+        -DBUILD_CLIENTS_SAMPLES=OFF \
+        -DBUILD_CLIENTS_TESTS=OFF \
+        -DBUILD_OFFLOAD_COMPRESS=ON \
+        -DBUILD_TESTING=OFF \
+        -DBUILD_WITH_SPARSE=OFF \
+    && cmake --build /build/rocsolver --parallel \
+    && cmake --install /build/rocsolver
+
+RUN git clone --filter=blob:none --recurse-submodules \
+        https://github.com/OpenNMT/CTranslate2.git ctranslate2 \
+    && git -C ctranslate2 checkout --detach "${CTRANSLATE2_COMMIT}" \
+    && git -C ctranslate2 submodule update --init --recursive \
+    && LD_LIBRARY_PATH="/opt/${ROCM_ARCH}/lib:/opt/rocm/lib" \
+       cmake -S ctranslate2 -B /build/ctranslate2 -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_COMPILER=/opt/rocm/bin/amdclang \
+        -DCMAKE_CXX_COMPILER=/opt/rocm/bin/amdclang++ \
+        -DCMAKE_CXX_FLAGS="-I/opt/${ROCM_ARCH}/include" \
+        -DCMAKE_HIP_ARCHITECTURES="${ROCM_ARCH}" \
+        -DCMAKE_HIP_FLAGS="-I/opt/${ROCM_ARCH}/include" \
+        -DCMAKE_INSTALL_PREFIX=/opt/ctranslate2-single-arch \
+        -DCMAKE_PREFIX_PATH="/opt/${ROCM_ARCH};/opt/rocm" \
+        -DGPU_TARGETS="${ROCM_ARCH}" \
+        -DOPENMP_RUNTIME=COMP \
+        -DBUILD_CLI=OFF \
+        -DBUILD_TESTS=OFF \
+        -DWITH_DNNL=OFF \
+        -DWITH_HIP=ON \
+        -DWITH_MKL=OFF \
+    && cmake --build /build/ctranslate2 --parallel \
+    && cmake --install /build/ctranslate2 \
+    && strip --strip-unneeded \
+        "/opt/${ROCM_ARCH}/lib/librocrand.so.1.1" \
+        "/opt/${ROCM_ARCH}/lib/librocsolver.so.0.7" \
+        /opt/ctranslate2-single-arch/lib/libctranslate2.so.*.*.*
+
+# Reuse the matching upstream package for the Python extension and runtime
+# libraries. The source build below replaces its three largest multi-ISA
+# libraries; the prebuilt build keeps them to reduce build time.
+FROM ${CTRANSLATE2_IMAGE} AS rocm-source
+
+ARG ROCM_VERSION=7.2.1
+ARG ROCM_ARCH
+
+RUN set -eux; \
+    rocm="/opt/rocm-${ROCM_VERSION}"; \
+    runtime=/opt/rocm-runtime; \
+    test -d "${rocm}"; \
+    mkdir -p \
+        "${runtime}/amdgcn" \
+        "${runtime}/lib/hipblaslt/library" \
+        "${runtime}/lib/rocblas/library"; \
+    for library in \
+        libamd_comgr.so \
+        libamdhip64.so \
+        libhipblas.so \
+        libhipblaslt.so \
+        libhiprand.so \
+        libhsa-runtime64.so \
+        librocblas.so \
+        librocprofiler-register.so \
+        librocrand.so \
+        librocroller.so \
+        librocsolver.so \
+        libroctx64.so; \
+    do \
+        cp -a "${rocm}/lib/${library}"* "${runtime}/lib/"; \
+    done; \
+    cp -a "${rocm}/amdgcn/bitcode" "${runtime}/amdgcn/"; \
+    cp -aL "${rocm}/lib/llvm/lib/libomp.so" "${runtime}/lib/libomp.so"; \
+    find "${rocm}/lib/hipblaslt/library" -maxdepth 1 -type f \
+        \( -name "*${ROCM_ARCH}*" -o ! -name '*gfx*' \) \
+        -exec cp -a '{}' "${runtime}/lib/hipblaslt/library/" ';'; \
+    find "${rocm}/lib/rocblas/library" -maxdepth 1 -type f \
+        \( -name "*${ROCM_ARCH}*" -o ! -name '*gfx*' \) \
+        -exec cp -a '{}' "${runtime}/lib/rocblas/library/" ';'; \
+    mkdir -p /opt/ctranslate2-runtime /opt/python-ctranslate2; \
+    cp -a /opt/ctranslate2/lib /opt/ctranslate2-runtime/; \
+    cp -a \
+        /usr/local/lib/python3.10/dist-packages/ctranslate2 \
+        /usr/local/lib/python3.10/dist-packages/ctranslate2-*.dist-info \
+        /opt/python-ctranslate2/; \
+    strip --strip-unneeded \
+        /opt/ctranslate2-runtime/lib/libctranslate2.so.4.8.2 \
+        /opt/python-ctranslate2/ctranslate2/_ext*.so \
+        "${runtime}/lib/librocroller.so.1.0.0"; \
+    test -f "${runtime}/lib/rocblas/library/Kernels.so-000-${ROCM_ARCH}.hsaco"; \
+    test -f "${runtime}/lib/hipblaslt/library/Kernels.so-000-${ROCM_ARCH}.hsaco"
+
+FROM rocm-source AS prebuilt
+
+FROM rocm-source AS source
+
+ARG ROCM_ARCH
+
+RUN rm -f \
+        /opt/rocm-runtime/lib/librocrand.so* \
+        /opt/rocm-runtime/lib/librocsolver.so* \
+        /opt/ctranslate2-runtime/lib/libctranslate2.so*
+
+COPY --from=single-arch-builder /opt/${ROCM_ARCH}/lib/ /opt/rocm-runtime/lib/
+COPY --from=single-arch-builder /opt/ctranslate2-single-arch/lib/ /opt/ctranslate2-runtime/lib/
+
+ARG ROCM_BUILD
+FROM ${ROCM_BUILD} AS selected-runtime
+
+FROM ubuntu:22.04
+
+ARG FASTER_WHISPER_VERSION=1.2.1
+ARG ROCM_ARCH
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        bzip2=1.0.* \
+        ca-certificates=202* \
+        curl=7.81.* \
+        libdrm-amdgpu1=2.4.* \
+        libdrm2=2.4.* \
+        libelf1=0.186-* \
+        libnuma1=2.0.* \
+        libstdc++6=12.* \
+        libzstd1=1.4.* \
+        python3=3.10.* \
+        python3-pip=22.0.* \
+        zlib1g=1:1.2.* \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=selected-runtime /opt/python-ctranslate2/ /usr/local/lib/python3.10/dist-packages/
+COPY --from=selected-runtime /opt/rocm-runtime/ /opt/rocm/
+COPY --from=selected-runtime /opt/ctranslate2-runtime/lib/ /opt/ctranslate2/lib/
+
+ENV CTRANSLATE2_ROOT=/opt/ctranslate2 \
+    LD_LIBRARY_PATH=/opt/ctranslate2/lib:/opt/rocm/lib \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    ROCM_ARCH=${ROCM_ARCH} \
+    ROCM_ROOT=/opt/rocm \
+    TMPDIR=/run/whisper-temp
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+RUN python3 -m pip install --no-cache-dir \
+        "faster-whisper==${FASTER_WHISPER_VERSION}" \
+        fastapi==0.141.1 \
+        python-multipart==0.0.32 \
+        sherpa-onnx==1.13.7 \
+        "uvicorn[standard]==0.52.4" \
+    && python3 -m pip check \
+    && python3 -c 'import ctranslate2; assert ctranslate2.__version__.startswith("4.8."), ctranslate2.__version__' \
+    && ! ldd /opt/ctranslate2/lib/libctranslate2.so.4 | grep -q 'not found'
+
+COPY ./run.sh /opt/src/run.sh
+COPY ./manage.sh /opt/src/manage.sh
+COPY ./api_server.py /opt/src/api_server.py
+COPY ./diarizer.py /opt/src/diarizer.py
+COPY ./LICENSE.md /opt/src/LICENSE.md
+
+RUN chmod 755 /opt/src/run.sh /opt/src/manage.sh \
+    && ln -s /opt/src/manage.sh /usr/local/bin/whisper_manage \
+    && mkdir -p /var/lib/whisper /run/whisper-temp
+
+ENTRYPOINT []
+EXPOSE 9000/tcp
+VOLUME ["/var/lib/whisper"]
+CMD ["/opt/src/run.sh"]
