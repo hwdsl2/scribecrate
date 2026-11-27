@@ -823,6 +823,8 @@ WHISPER_DIARIZE_EMBEDDING_MODEL=wespeaker_en_voxceleb_resnet34_LM.onnx
 
 所选模型会在首次使用时下载，并缓存在 `/var/lib/whisper` 数据卷中，与之前使用过的模型并存。`whisper_manage --downloaddiarize` 会预下载容器启动时配置的模型。聚类阈值与模型相关：切换模型后，请重新调整 `WHISPER_DIARIZE_THRESHOLD` 或设置 `WHISPER_DIARIZE_NUM_SPEAKERS`。未设置或为空时保持默认模型，现有缓存文件名和阈值不受影响。
 
+**CAM++ 升级：** 下载修正版时，ScribeCrate 会保留已缓存的旧文件。设置 `WHISPER_LOCAL_ONLY` 后，若缓存中没有修正版且旧版通过校验，ScribeCrate 会记录警告并使用旧版。离线前请运行 `whisper_manage --downloaddiarize <filename>` 预先下载修正版。若要回滚到旧镜像并继续使用 CAM++，请确保旧版模型文件位于 `/var/lib/whisper/<filename>`。
+
 **模型校验：** 说话人分离 ONNX 模型会在处理管道加载时，按固定的预期文件大小和 SHA-256 哈希值进行校验，已有缓存文件也包括在内。通过校验的缓存文件会直接复用，无需重新下载。未通过校验的现有缓存文件会被保留，日志中会指出对应文件。请将该文件移走，再在允许下载的情况下重启，以获取通过校验的副本。校验、下载或模型加载失败时，会记录警告并禁用说话人分离，转录仍可使用。新下载的模型在存入正式缓存前也会经过校验；未完成或失败的下载不会被使用。支持通过符号链接使用模型文件及现有分割模型目录。链接指向的模型必须是普通文件，并通过相同校验。失效链接或无效目标会被保留，并在日志中报告；请修复链接或其目标，或将对应缓存项移走后重试。
 
 启用说话人分离且允许自动下载时，容器和 Colab 的启动等待时间会涵盖两个 ONNX 模型的下载及重试。仅使用 Whisper 或处于离线模式时，等待上限为五分钟。如果服务器进程退出，会提前停止等待。
@@ -837,7 +839,7 @@ docker exec whisper whisper_manage --downloaddiarize wespeaker_en_voxceleb_resne
 
 不提供参数时，使用容器启动时保存的模型；没有保存的选择时使用现有默认模型。预先下载不会改变当前使用的模型。请按环境变量的重启/重建说明应用选择更改，并保留模型数据卷以便回滚。
 
-支持的权重来自 [sherpa-onnx 上游模型发布](https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models)。模型权重遵循各自的上游许可证，与 ScribeCrate 的 MIT 许可证分开。
+ScribeCrate 使用 sherpa-onnx 维护者提供的[嵌入模型](https://huggingface.co/csukuangfj/speaker-embedding-models)和[分割模型](https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0)，并固定其版本。模型权重遵循各自的上游许可证，与 ScribeCrate 的 MIT 许可证分开。
 
 ## 使用计数
 

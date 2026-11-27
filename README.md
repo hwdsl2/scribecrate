@@ -829,6 +829,8 @@ English-trained options include `wespeaker_en_voxceleb_resnet34_LM.onnx` (~27 MB
 
 The selected model is downloaded on first use and cached in the `/var/lib/whisper` volume next to any previously used model. `whisper_manage --downloaddiarize` pre-downloads the model the container was started with. Clustering thresholds are model-specific: after switching, re-tune `WHISPER_DIARIZE_THRESHOLD` or set `WHISPER_DIARIZE_NUM_SPEAKERS`. Unset or empty keeps the default model, so existing cache filenames and thresholds are unchanged.
 
+**CAM++ upgrades:** ScribeCrate keeps older files when it downloads a corrected CAM++ model. With `WHISPER_LOCAL_ONLY` set, it warns and uses a verified older copy if the corrected one is missing. Before going offline, prefetch the fix with `whisper_manage --downloaddiarize <filename>`. To roll back with CAM++ selected, the older image needs the original file at `/var/lib/whisper/<filename>`.
+
 **Model verification:** Diarization ONNX models, including files already in the cache, are checked against pinned sizes and SHA-256 hashes when the pipeline loads. Matching cached files are reused without downloading again. An existing cache file that fails verification is preserved and identified in the logs. Move that file aside, then restart with downloads enabled to obtain a verified copy. Verification, download, or model-loading failures log a warning and disable diarization while transcription remains available. Newly downloaded models are verified before becoming cache files; incomplete or failed downloads are not used. Symbolic links to regular model files and to an existing segmentation directory are supported. Linked models must pass the same verification. Broken links and invalid targets are preserved and reported; repair them or move the cache entry aside before retrying.
 
 When diarization is enabled and automatic downloads are permitted, container and Colab startup waits include time for both ONNX downloads and their retries. Whisper-only and offline startup use a five-minute window. Waiting stops early if the server process exits.
@@ -843,7 +845,7 @@ docker exec whisper whisper_manage --downloaddiarize wespeaker_en_voxceleb_resne
 
 Without an argument it uses the model saved at container startup, or the existing default when no saved selection exists. Pre-downloading does not change the active model. Apply selection changes using the environment-variable restart/recreation guidance and keep the model volume for rollback.
 
-The supported weights come from the [upstream sherpa-onnx model release](https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models). Model weights have their own upstream licenses, separate from ScribeCrate's MIT license.
+ScribeCrate uses pinned revisions of the sherpa-onnx maintainer's [embedding](https://huggingface.co/csukuangfj/speaker-embedding-models) and [segmentation](https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0) models. Model weights have their own upstream licenses, separate from ScribeCrate's MIT license.
 
 ## Usage counts
 

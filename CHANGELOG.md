@@ -2,6 +2,13 @@
 
 Notable changes to ScribeCrate are documented here.
 
+## 2026-11-26
+
+### Fixed
+
+- Restore diarization downloads by pinning the embedding and segmentation sources to exact revisions.
+- Use the five corrected CAM++ embeddings while retaining existing files for verified offline reuse and rollback.
+
 ## 2026-11-15
 
 Release: `2026.11.1`
