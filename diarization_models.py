@@ -18,7 +18,6 @@ import os
 from pathlib import Path
 import stat
 import subprocess
-import tarfile
 import tempfile
 from typing import NamedTuple
 from urllib.parse import quote
@@ -33,17 +32,18 @@ class ModelAsset(NamedTuple):
 
 
 DEFAULT_EMBEDDING_MODEL = "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
-# Official speaker-recongition-models/checksum.txt, verified 2026-10-31.
-# Manifest SHA-256: c3a928cc16d165ce869553f71fcbe6fc1c1b513aee0665414548780a979b2325
-# Sizes from the same official release asset metadata.
-# Keep the release tag's upstream spelling ("recongition").
+_EMBEDDING_URL = "https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/"
+_EMBEDDING_REVISION = "0743f301363dec56491a490f6d6cbc9d67f9a3bf"
+_CAMPP_REVISION = "a8055d6daef723a6a4ecf4de233708575bf4994f"
+# Sizes and SHA-256 values from the pinned revisions. Only CAM++ uses the
+# newer exports. The other models retain the bytes used by existing caches.
 EMBEDDING_MODELS = {
     '3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx': ModelAsset(
-        29596978, '357a834f702b80161e5b981182c038e18553c1f2ca752ed6cec2052365d4129b'),
+        29596979, '98daf9bcf1c8abf3db374fec4c27a5eda7c58705bb3f180d057b085a72a88bb5'),
     '3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx': ModelAsset(
-        28281138, 'f682b514c05d947ee3fa91cd6ec6c5c7543479a128373fa29b1faedccd21fd11'),
+        28281139, 'e6af4d4c444f3dab01d991bb9b7d5af98eb979e329f6c8880a19d5553561ed25'),
     '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx': ModelAsset(
-        28281164, 'aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2'),
+        28281165, '53cab20ba8f2eb2f6e2d89ecc18e88ef3222169b61b4419cbc13666744a4574b'),
     '3dspeaker_speech_eres2net_base_200k_sv_zh-cn_16k-common.onnx': ModelAsset(
         39593765, 'e2d2048292e055f7b61cdec3db010503f35369b245bf0b3bbad021c9a91e4053'),
     '3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx': ModelAsset(
@@ -63,9 +63,9 @@ EMBEDDING_MODELS = {
     'nemo_en_titanet_small.onnx': ModelAsset(
         40257283, 'ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e'),
     'wespeaker_en_voxceleb_CAM++.onnx': ModelAsset(
-        29292684, 'c46fad10b5f81e1aa4a60c162714208577093655076c5450f8c469e522ec54ef'),
+        29281636, '7acd352a0372de23ce49379b02864833b7f3f501b4ea25248fc977389f08e5fc'),
     'wespeaker_en_voxceleb_CAM++_LM.onnx': ModelAsset(
-        29292687, 'e197af7e9d473030cf486b3124149a19bf37014d0e4485e4c70c483b0ec10cb2'),
+        29281639, '231fe146b6ee64ffc39042e9953a1640fa3bd28c043ff3fcf0ea619e3aacb7ae'),
     'wespeaker_en_voxceleb_resnet152_LM.onnx': ModelAsset(
         79158470, '3e1c2c7a02097bdddc27c1cf7382237399abdc3b5b682e59455830673c6686e7'),
     'wespeaker_en_voxceleb_resnet221_LM.onnx': ModelAsset(
@@ -81,28 +81,48 @@ EMBEDDING_MODELS = {
     'wespeaker_zh_cnceleb_resnet34_LM.onnx': ModelAsset(
         26530548, '87d1d5068397f3792c730570b53d66cd8be1da7ea22dd04f5b6706d96a3cd168'),
 }
-_RELEASE_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/"
+# Exact bytes from _EMBEDDING_REVISION, retained for verified offline reuse.
+_LEGACY_CAMPP_MODELS = {
+    '3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx': ModelAsset(
+        29596978, '357a834f702b80161e5b981182c038e18553c1f2ca752ed6cec2052365d4129b'),
+    '3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx': ModelAsset(
+        28281138, 'f682b514c05d947ee3fa91cd6ec6c5c7543479a128373fa29b1faedccd21fd11'),
+    '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx': ModelAsset(
+        28281164, 'aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2'),
+    'wespeaker_en_voxceleb_CAM++.onnx': ModelAsset(
+        29292684, 'c46fad10b5f81e1aa4a60c162714208577093655076c5450f8c469e522ec54ef'),
+    'wespeaker_en_voxceleb_CAM++_LM.onnx': ModelAsset(
+        29292687, 'e197af7e9d473030cf486b3124149a19bf37014d0e4485e4c70c483b0ec10cb2'),
+}
+
 SEGMENTATION_MODEL = "sherpa-onnx-pyannote-segmentation-3-0/model.onnx"
-_SEGMENTATION_ARCHIVE = "sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
-# The segmentation release has no checksum manifest. These hashes were computed
-# from the official HTTPS asset and its model.onnx, verified 2026-10-31.
-_SEGMENTATION_DOWNLOAD = ModelAsset(
-    6958444, "24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488")
+_SEGMENTATION_URL = (
+    "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/"
+    "9403a6902bb58e3d5ae8c7e77c3422de279db2e0/"
+)
+# Model and license bytes match the original sherpa-onnx GitHub archive.
 _SEGMENTATION_ASSET = ModelAsset(
     5992913, "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079")
+_SEGMENTATION_LICENSE = ModelAsset(
+    1061, "14d7016ad68e7394d6e6b78d96cc2ae431c905287b89674cfdf021e79e62b8ba")
 
 _DOWNLOAD_MAX_TIME = 900
+_LICENSE_MAX_TIME = 30
 _DOWNLOAD_RETRIES = 2
-_DOWNLOAD_PROCESS_TIMEOUT = _DOWNLOAD_MAX_TIME * (_DOWNLOAD_RETRIES + 1) + 30
+
+
+def _download_process_timeout(max_time: int) -> int:
+    return max_time * (_DOWNLOAD_RETRIES + 1) + 30
 
 
 def startup_timeout_seconds(*, diarization_enabled: bool, local_files_only: bool) -> int:
     """Retain the normal startup window, adding online ONNX download budgets."""
     timeout = 300
     if diarization_enabled and not local_files_only:
-        # Segmentation and embedding download sequentially. Retain the original
-        # Whisper startup allowance and leave a minute for native initialization.
-        timeout += 2 * _DOWNLOAD_PROCESS_TIMEOUT + 60
+        # Budget both model downloads and a missing segmentation license.
+        # Retain the Whisper startup allowance and a minute for native initialization.
+        timeout += (2 * _download_process_timeout(_DOWNLOAD_MAX_TIME)
+                    + _download_process_timeout(_LICENSE_MAX_TIME) + 60)
     return timeout
 
 
@@ -151,23 +171,22 @@ def _verified(path: Path, asset: ModelAsset) -> bool:
     return True
 
 
-def _download_file(url: str, dest: Path, asset: ModelAsset) -> None:
+def _download_file(url: str, dest: Path, asset: ModelAsset, *,
+                   max_time: int = _DOWNLOAD_MAX_TIME) -> None:
     logger.info("Downloading %s", url)
-    # Allow 15 minutes per attempt, with an overall cap for three attempts plus a margin.
     subprocess.run([
         "curl", "--disable", "--fail", "--location", "--silent", "--show-error",
         "--proto", "=https", "--proto-redir", "=https",
-        "--connect-timeout", "15", "--max-time", str(_DOWNLOAD_MAX_TIME),
+        "--connect-timeout", "15", "--max-time", str(max_time),
         "--retry", str(_DOWNLOAD_RETRIES), "--retry-delay", "2", "--max-filesize", str(asset.size),
         "--output", str(dest), url,
-    ], check=True, timeout=_DOWNLOAD_PROCESS_TIMEOUT)
+    ], check=True, timeout=_download_process_timeout(max_time))
     if not _verified(dest, asset):
         raise RuntimeError(f"Download did not produce the expected file: {dest}")
 
 
 def _temporary(parent: Path):
-    # TemporaryDirectory removes partial downloads and extraction outputs even
-    # when download, checksum, extraction or publication fails.
+    # Clean up staged downloads on transfer, verification or publication failure.
     return tempfile.TemporaryDirectory(prefix=".diarization-", dir=parent)
 
 
@@ -181,7 +200,7 @@ def ensure_models(cache_dir: str, embedding_model: str = DEFAULT_EMBEDDING_MODEL
     """Verify/reuse the selected models, downloading atomically when permitted.
 
     Cache directory ownership is trusted, as with the Whisper model cache.
-    Separate filenames retain existing caches and allow switching back offline.
+    The corrected CAM++ files use digest-specific paths for offline reuse and rollback.
     Model-file and segmentation-directory symlinks are supported; model targets
     must be existing regular files that pass verification. Invalid links remain
     untouched so shared cache files are not silently replaced.
@@ -190,7 +209,12 @@ def ensure_models(cache_dir: str, embedding_model: str = DEFAULT_EMBEDDING_MODEL
     root = Path(cache_dir)
     root.mkdir(parents=True, exist_ok=True)
     seg_path = root / SEGMENTATION_MODEL
-    emb_path = root / name
+    flat_emb_path = root / name
+    asset = EMBEDDING_MODELS[name]
+    legacy_asset = _LEGACY_CAMPP_MODELS.get(name)
+    emb_path = flat_emb_path
+    if legacy_asset is not None:
+        emb_path = root / "diarization" / "embeddings" / asset.sha256 / name
     if seg_path.parent.is_symlink() and not seg_path.parent.is_dir():
         raise RuntimeError(
             f"Segmentation cache directory link must point to an existing directory: {seg_path.parent}. "
@@ -198,7 +222,16 @@ def ensure_models(cache_dir: str, embedding_model: str = DEFAULT_EMBEDDING_MODEL
         )
     seg_path.parent.mkdir(exist_ok=True)
     missing_seg = not _verified(seg_path, _SEGMENTATION_ASSET)
-    missing_emb = not _verified(emb_path, EMBEDDING_MODELS[name])
+    missing_emb = not _verified(emb_path, asset)
+    if missing_emb and legacy_asset is not None:
+        legacy_cached = _verified(flat_emb_path, legacy_asset)
+        if legacy_cached and local_files_only and not missing_seg:
+            logger.warning(
+                "Using the older cached CAM++ model %s in offline mode. "
+                "Prefetch the corrected model with 'whisper_manage --downloaddiarize %s'.",
+                name, name,
+            )
+            return str(seg_path), str(flat_emb_path)
     if local_files_only and (missing_seg or missing_emb):
         missing = seg_path if missing_seg else emb_path
         raise RuntimeError(f"WHISPER_LOCAL_ONLY prevents downloading missing diarization model: {missing}")
@@ -206,44 +239,28 @@ def ensure_models(cache_dir: str, embedding_model: str = DEFAULT_EMBEDDING_MODEL
     if missing_seg:
         with _temporary(seg_path.parent) as directory:
             work = Path(directory)
-            archive = work / _SEGMENTATION_ARCHIVE
-            _download_file(_RELEASE_URL + "speaker-segmentation-models/" + _SEGMENTATION_ARCHIVE,
-                           archive, _SEGMENTATION_DOWNLOAD)
-            # Read only the exact model and license. Never extract arbitrary archive
-            # paths, links or scripts into a persistent model cache.
-            with tarfile.open(archive, "r:bz2") as tar:
-                member = tar.getmember(SEGMENTATION_MODEL)
-                if not member.isfile() or member.size != _SEGMENTATION_ASSET.size:
-                    raise RuntimeError("Unexpected segmentation archive model member")
-                with tar.extractfile(member) as source, (work / "model.onnx").open("wb") as dest:
-                    remaining = _SEGMENTATION_ASSET.size
-                    while remaining:
-                        block = source.read(min(1024 * 1024, remaining))
-                        if not block:
-                            raise RuntimeError("Truncated segmentation model")
-                        dest.write(block)
-                        remaining -= len(block)
-                license_member = tar.getmember(str(Path(SEGMENTATION_MODEL).parent / "LICENSE"))
-                if not license_member.isfile() or not 0 < license_member.size <= 65536:
-                    raise RuntimeError("Unexpected segmentation archive license member")
-                with tar.extractfile(license_member) as source:
-                    license_data = source.read(65537)
-                if len(license_data) != license_member.size:
-                    raise RuntimeError("Truncated segmentation license")
-                (work / "LICENSE").write_bytes(license_data)
-            _verified(work / "model.onnx", _SEGMENTATION_ASSET)
-            # Retain the upstream copyright/license alongside downloaded weights.
-            # Preserve a license already installed by the previous downloader.
-            if not os.path.lexists(seg_path.parent / "LICENSE"):
-                _publish(work / "LICENSE", seg_path.parent / "LICENSE")
-            _publish(work / "model.onnx", seg_path)
+            download = work / seg_path.name
+            license_path = seg_path.with_name("LICENSE")
+            license_download = work / license_path.name
+            _download_file(_SEGMENTATION_URL + seg_path.name, download, _SEGMENTATION_ASSET)
+            missing_license = not os.path.lexists(license_path)
+            if missing_license:
+                _download_file(_SEGMENTATION_URL + license_path.name, license_download,
+                               _SEGMENTATION_LICENSE, max_time=_LICENSE_MAX_TIME)
+            if not _verified(seg_path, _SEGMENTATION_ASSET):
+                # Publish after both files verify. Preserve any existing license.
+                if missing_license and not os.path.lexists(license_path):
+                    _publish(license_download, license_path)
+                _publish(download, seg_path)
 
     if missing_emb:
-        with _temporary(root) as directory:
+        revision = _CAMPP_REVISION if legacy_asset is not None else _EMBEDDING_REVISION
+        emb_path.parent.mkdir(parents=True, exist_ok=True)
+        with _temporary(emb_path.parent) as directory:
             download = Path(directory) / name
-            _download_file(_RELEASE_URL + "speaker-recongition-models/" + quote(name, safe=""),
-                           download, EMBEDDING_MODELS[name])
-            _publish(download, emb_path)
+            _download_file(f"{_EMBEDDING_URL}{revision}/{quote(name, safe='')}", download, asset)
+            if not _verified(emb_path, asset):
+                _publish(download, emb_path)
     return str(seg_path), str(emb_path)
 
 
@@ -255,7 +272,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     try:
         paths = ensure_models(args.cache_dir, args.embedding_model)
-    except (ValueError, RuntimeError, OSError, KeyError, subprocess.SubprocessError, tarfile.TarError) as exc:
+    except (ValueError, RuntimeError, OSError, KeyError, subprocess.SubprocessError) as exc:
         parser.exit(1, f"Error: {exc}\n")
     print("Speaker embedding model: " + resolve_embedding_model(args.embedding_model))
     print("Diarization models verified: " + ", ".join(paths))

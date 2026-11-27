@@ -25,21 +25,11 @@ from diarization_models import (
 logger = logging.getLogger("whisper_server.diarizer")
 
 # ---------------------------------------------------------------------------
-# Model URLs (GitHub releases from k2-fsa/sherpa-onnx)
+# Model filenames
 # ---------------------------------------------------------------------------
-
-_SEG_MODEL_URL = (
-    "https://github.com/k2-fsa/sherpa-onnx/releases/download/"
-    "speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
-)
-_EMB_MODEL_BASE_URL = (
-    "https://github.com/k2-fsa/sherpa-onnx/releases/download/"
-    "speaker-recongition-models/"
-)
 
 _SEG_MODEL_REL = SEGMENTATION_MODEL
 _EMB_MODEL_REL = DEFAULT_EMBEDDING_MODEL
-_EMB_MODEL_URL = _EMB_MODEL_BASE_URL + _EMB_MODEL_REL
 EMBEDDING_MODELS = tuple(MODEL_ASSETS)
 
 # ---------------------------------------------------------------------------
