@@ -29,48 +29,21 @@ jobs:
         uses: actions/cache@v6
         with:
           path: |
-            ${{ runner.temp }}/.buildx-bin
             ${{ runner.temp }}/.buildx-cache
             ${{ runner.temp }}/.docker-images
           key: ${{ secrets.CACHE_NAME }}-amd64-${{ github.sha }}-${{ github.run_id }}
           restore-keys: |
             ${{ secrets.CACHE_NAME }}-amd64-
       - name: Set up Buildx
-        env:
-          RUNNER_TEMP: ${{ runner.temp }}
+        id: setup_buildx
+        shell: bash
         run: |
-          [ ! -x /usr/bin/docker ] && exit 1
-          if [ ! -x /usr/bin/wget ] || [ ! -x /usr/bin/jq ]; then
-            export DEBIAN_FRONTEND=noninteractive
-            sudo apt-get -yq update
-            sudo apt-get -yq install wget jq
-          fi
-
-          BUILDX_VER=$(wget -t 3 -T 30 -qO- "https://api.github.com/repos/docker/buildx/releases/latest" | jq -r ".tag_name")
-          [ -z "${BUILDX_VER}" ] && exit 1
-          echo "Buildx version: ${BUILDX_VER}"
-
-          DOCKER_DIR="${HOME}/.docker/cli-plugins"
-          CACHE_DIR="${RUNNER_TEMP}/.buildx-bin"
-          mkdir -p "${DOCKER_DIR}"
-          if [ -s "${CACHE_DIR}/docker-buildx-${BUILDX_VER}" ]; then
-            echo "Using buildx binary from cache..."
-            cp -f "${CACHE_DIR}/docker-buildx-${BUILDX_VER}" "${DOCKER_DIR}/docker-buildx"
-          else
-            echo "Downloading buildx..."
-            BUILDX_URL="https://github.com/docker/buildx/releases/download/${BUILDX_VER}/buildx-${BUILDX_VER}.linux-amd64"
-            wget -t 3 -T 30 -nv -O "${DOCKER_DIR}/docker-buildx" "${BUILDX_URL}"
-            [ ! -s "${DOCKER_DIR}/docker-buildx" ] && exit 1
-            /bin/rm -rf "${CACHE_DIR}"
-            mkdir -p "${CACHE_DIR}"
-            /bin/cp -f "${DOCKER_DIR}/docker-buildx" "${CACHE_DIR}/docker-buildx-${BUILDX_VER}"
-          fi
-          chmod a+x "${DOCKER_DIR}/docker-buildx"
-
-          docker info
           docker buildx version
-          docker buildx create --name "builder-${GITHUB_SHA::8}" --driver docker-container --use
-          docker buildx inspect --bootstrap
+          docker info
+          builder="builder-${GITHUB_SHA::8}"
+          docker buildx create --name "$builder" --driver docker-container --use
+          printf 'builder=%s\n' "$builder" >> "$GITHUB_OUTPUT"
+          docker buildx inspect --bootstrap "$builder"
       - name: Quay.io Login
         env:
           QUAY_USER: ${{ secrets.QUAY_USER }}
@@ -123,10 +96,16 @@ jobs:
           /bin/mv -f "${RUNNER_TEMP}/.buildx-cache-new" "${RUNNER_TEMP}/.buildx-cache"
       - name: Clear
         if: always()
+        env:
+          BUILDER_NAME: ${{ steps.setup_buildx.outputs.builder }}
         run: |
-          shred -u "${HOME}/.docker/config.json"
-          rm -f "${HOME}/.docker/config.json"
-          docker buildx rm "builder-${GITHUB_SHA::8}" || true
+          docker_config="${HOME}/.docker/config.json"
+          if [ -f "$docker_config" ]; then
+            shred -u "$docker_config" || rm -f "$docker_config"
+          fi
+          if [ -n "$BUILDER_NAME" ]; then
+            docker buildx rm "$BUILDER_NAME" || true
+          fi
 
   buildx-arm64:
     runs-on: ubuntu-24.04-arm
@@ -139,48 +118,21 @@ jobs:
         uses: actions/cache@v6
         with:
           path: |
-            ${{ runner.temp }}/.buildx-bin
             ${{ runner.temp }}/.buildx-cache
             ${{ runner.temp }}/.docker-images
           key: ${{ secrets.CACHE_NAME }}-arm64-${{ github.sha }}-${{ github.run_id }}
           restore-keys: |
             ${{ secrets.CACHE_NAME }}-arm64-
       - name: Set up Buildx
-        env:
-          RUNNER_TEMP: ${{ runner.temp }}
+        id: setup_buildx
+        shell: bash
         run: |
-          [ ! -x /usr/bin/docker ] && exit 1
-          if [ ! -x /usr/bin/wget ] || [ ! -x /usr/bin/jq ]; then
-            export DEBIAN_FRONTEND=noninteractive
-            sudo apt-get -yq update
-            sudo apt-get -yq install wget jq
-          fi
-
-          BUILDX_VER=$(wget -t 3 -T 30 -qO- "https://api.github.com/repos/docker/buildx/releases/latest" | jq -r ".tag_name")
-          [ -z "${BUILDX_VER}" ] && exit 1
-          echo "Buildx version: ${BUILDX_VER}"
-
-          DOCKER_DIR="${HOME}/.docker/cli-plugins"
-          CACHE_DIR="${RUNNER_TEMP}/.buildx-bin"
-          mkdir -p "${DOCKER_DIR}"
-          if [ -s "${CACHE_DIR}/docker-buildx-${BUILDX_VER}" ]; then
-            echo "Using buildx binary from cache..."
-            cp -f "${CACHE_DIR}/docker-buildx-${BUILDX_VER}" "${DOCKER_DIR}/docker-buildx"
-          else
-            echo "Downloading buildx..."
-            BUILDX_URL="https://github.com/docker/buildx/releases/download/${BUILDX_VER}/buildx-${BUILDX_VER}.linux-arm64"
-            wget -t 3 -T 30 -nv -O "${DOCKER_DIR}/docker-buildx" "${BUILDX_URL}"
-            [ ! -s "${DOCKER_DIR}/docker-buildx" ] && exit 1
-            /bin/rm -rf "${CACHE_DIR}"
-            mkdir -p "${CACHE_DIR}"
-            /bin/cp -f "${DOCKER_DIR}/docker-buildx" "${CACHE_DIR}/docker-buildx-${BUILDX_VER}"
-          fi
-          chmod a+x "${DOCKER_DIR}/docker-buildx"
-
-          docker info
           docker buildx version
-          docker buildx create --name "builder-${GITHUB_SHA::8}" --driver docker-container --use
-          docker buildx inspect --bootstrap
+          docker info
+          builder="builder-${GITHUB_SHA::8}"
+          docker buildx create --name "$builder" --driver docker-container --use
+          printf 'builder=%s\n' "$builder" >> "$GITHUB_OUTPUT"
+          docker buildx inspect --bootstrap "$builder"
       - name: Quay.io Login
         env:
           QUAY_USER: ${{ secrets.QUAY_USER }}
@@ -233,10 +185,16 @@ jobs:
           /bin/mv -f "${RUNNER_TEMP}/.buildx-cache-new" "${RUNNER_TEMP}/.buildx-cache"
       - name: Clear
         if: always()
+        env:
+          BUILDER_NAME: ${{ steps.setup_buildx.outputs.builder }}
         run: |
-          shred -u "${HOME}/.docker/config.json"
-          rm -f "${HOME}/.docker/config.json"
-          docker buildx rm "builder-${GITHUB_SHA::8}" || true
+          docker_config="${HOME}/.docker/config.json"
+          if [ -f "$docker_config" ]; then
+            shred -u "$docker_config" || rm -f "$docker_config"
+          fi
+          if [ -n "$BUILDER_NAME" ]; then
+            docker buildx rm "$BUILDER_NAME" || true
+          fi
 
   manifest:
     runs-on: ubuntu-24.04

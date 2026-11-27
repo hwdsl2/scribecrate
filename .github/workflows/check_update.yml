@@ -31,7 +31,6 @@ jobs:
         uses: actions/cache@v6
         with:
           path: |
-            ${{ runner.temp }}/.buildx-bin
             ${{ runner.temp }}/.buildx-cache
             ${{ runner.temp }}/.docker-images
           key: ${{ secrets.CACHE_NAME }}-${{ github.sha }}-${{ github.run_id }}-check
