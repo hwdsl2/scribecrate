@@ -178,14 +178,15 @@ def check(args):
     # No new weights should be downloaded, and diarization must remain enabled.
     os.environ["WHISPER_LOCAL_ONLY"] = "true"
     api._load_model()
-    api._load_diarizer()
+    with mock.patch.object(diarizer.sherpa_onnx, "OfflineSpeakerDiarization", wraps=constructor) as native:
+        api._load_diarizer()
     assert api._diarization_enabled and diarizer.is_loaded(), "Offline cached pipeline did not load"
     asyncio.run(request(api, args.audio))
     results["offline_cached_api"] = "passed"
+    config = native.call_args.args[0]
     results["model_sha256"] = {
-        name: hashlib.sha256(path.read_bytes()).hexdigest()
-        for name in (diarizer._SEG_MODEL_REL, api._diarize_embedding_model)
-        for path in (args.cache / name,)
+        diarizer._SEG_MODEL_REL: hashlib.sha256(Path(config.segmentation.pyannote.model).read_bytes()).hexdigest(),
+        api._diarize_embedding_model: hashlib.sha256(Path(config.embedding.model).read_bytes()).hexdigest(),
     }
     results["whisper_snapshot_ids"] = sorted(path.name for path in args.cache.glob(
         "models--Systran--faster-whisper-tiny/snapshots/*") if path.is_dir())

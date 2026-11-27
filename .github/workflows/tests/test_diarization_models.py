@@ -1,12 +1,12 @@
 """Verified ONNX downloads, safe caches, offline behavior and explicit prefetch."""
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
-import io
 import os
 from pathlib import Path
 import subprocess
 import sys
-import tarfile
 import tempfile
+import threading
 from types import SimpleNamespace
 import unittest
 from unittest import mock
@@ -18,6 +18,7 @@ import diarization_models as models
 ROOT = Path(__file__).resolve().parents[3]
 NAMES = tuple(models.EMBEDDING_MODELS)
 DEFAULT = models.DEFAULT_EMBEDDING_MODEL
+CAMPP = "wespeaker_en_voxceleb_CAM++.onnx"
 
 
 class ModelMetadataTests(unittest.TestCase):
@@ -75,7 +76,7 @@ class AutomaticOfflineTests(unittest.TestCase):
 
 
 class StartupBudgetTests(unittest.TestCase):
-    def test_online_budget_covers_both_downloads_and_preserves_other_startups(self):
+    def test_online_budget_covers_model_and_license_downloads(self):
         payload = b"download budget fixture"
         asset = models.ModelAsset(len(payload), hashlib.sha256(payload).hexdigest())
         def download(command, **kwargs):
@@ -83,16 +84,19 @@ class StartupBudgetTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, \
                 mock.patch.object(models.subprocess, "run", side_effect=download) as curl:
             models._download_file("https://example.invalid/model", Path(directory) / "model", asset)
-        process_timeout = curl.call_args.kwargs["timeout"]
-        command = curl.call_args.args[0]
-        attempt_timeout = int(command[command.index("--max-time") + 1])
-        attempts = 1 + int(command[command.index("--retry") + 1])
-        self.assertGreater(process_timeout, attempt_timeout * attempts)
+            models._download_file("https://example.invalid/LICENSE", Path(directory) / "LICENSE", asset,
+                                  max_time=models._LICENSE_MAX_TIME)
+        model_call, license_call = curl.call_args_list
+        for call, expected in ((model_call, "900"), (license_call, "30")):
+            command = call.args[0]
+            attempts = 1 + int(command[command.index("--retry") + 1])
+            self.assertEqual(command[command.index("--max-time") + 1], expected)
+            self.assertGreater(call.kwargs["timeout"], int(expected) * attempts)
         for enabled, offline in ((False, False), (False, True), (True, True)):
             self.assertEqual(models.startup_timeout_seconds(
                 diarization_enabled=enabled, local_files_only=offline), 300)
-        self.assertGreater(models.startup_timeout_seconds(
-            diarization_enabled=True, local_files_only=False), 300 + 2 * process_timeout)
+        self.assertEqual(models.startup_timeout_seconds(diarization_enabled=True, local_files_only=False),
+                         300 + 2 * model_call.kwargs["timeout"] + license_call.kwargs["timeout"] + 60)
 
     def test_container_wait_handles_slow_startup_exit_and_timeout(self):
         source = (ROOT / "run.sh").read_text()
@@ -140,10 +144,16 @@ class ModelCacheTests(unittest.TestCase):
         self.addCleanup(self.work.cleanup)
         self.root = Path(self.work.name)
         self.seg = b"segmentation fixture"
+        self.license = b"license fixture"
         self.payloads = {name: name.encode() for name in NAMES}
         self.assets = {name: self.asset(data) for name, data in self.payloads.items()}
+        self.legacy_payloads = {name: b"older " + name.encode() for name in models._LEGACY_CAMPP_MODELS}
+        legacy_assets = {name: self.asset(data) for name, data in self.legacy_payloads.items()}
+        self.payloads.update({"model.onnx": self.seg, "LICENSE": self.license})
         for patch in (mock.patch.object(models, "EMBEDDING_MODELS", self.assets),
-                      mock.patch.object(models, "_SEGMENTATION_ASSET", self.asset(self.seg))):
+                      mock.patch.object(models, "_LEGACY_CAMPP_MODELS", legacy_assets),
+                      mock.patch.object(models, "_SEGMENTATION_ASSET", self.asset(self.seg)),
+                      mock.patch.object(models, "_SEGMENTATION_LICENSE", self.asset(self.license))):
             patch.start()
             self.addCleanup(patch.stop)
         seg_path = self.root / models.SEGMENTATION_MODEL
@@ -158,6 +168,9 @@ class ModelCacheTests(unittest.TestCase):
         dest = Path(command[command.index("--output") + 1])
         dest.write_bytes(self.payloads[unquote(command[-1].split("/")[-1])])
 
+    def corrected_path(self, name):
+        return self.root / "diarization" / "embeddings" / self.assets[name].sha256 / name
+
     def test_all_models_download_once_and_switch_back_offline(self):
         # Explicit prefetch remains permitted even when automatic startup is offline.
         with mock.patch.dict(os.environ, {"WHISPER_LOCAL_ONLY": "1"}), \
@@ -165,13 +178,23 @@ class ModelCacheTests(unittest.TestCase):
             for name in NAMES:
                 _, emb = models.ensure_models(str(self.root), name)
                 self.assertEqual(Path(emb).read_bytes(), self.payloads[name])
+                command = curl.call_args.args[0]
+                if name in self.legacy_payloads:
+                    revision = "a8055d6daef723a6a4ecf4de233708575bf4994f"
+                    self.assertEqual(Path(emb), self.corrected_path(name))
+                else:
+                    revision = "0743f301363dec56491a490f6d6cbc9d67f9a3bf"
+                    self.assertEqual(Path(emb), self.root / name)
+                self.assertTrue(command[-1].startswith(
+                    "https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/" + revision + "/"))
+                self.assertEqual(command[command.index("--max-filesize") + 1], str(self.assets[name].size))
             self.assertEqual(curl.call_count, len(NAMES))
             for name in (*NAMES, ""):
                 models.ensure_models(str(self.root), name, local_files_only=True)
             self.assertEqual(curl.call_count, len(NAMES))
-            command = curl.call_args.args[0]
+            self.assertEqual(command[:2], ["curl", "--disable"])
+            self.assertEqual(command[command.index("--proto") + 1], "=https")
             self.assertEqual(command[command.index("--proto-redir") + 1], "=https")
-            self.assertEqual(command[command.index("--max-filesize") + 1], str(self.assets[NAMES[-1]].size))
         self.assertFalse(list(self.root.rglob(".diarization-*")))
 
     def test_missing_offline_never_downloads(self):
@@ -181,12 +204,79 @@ class ModelCacheTests(unittest.TestCase):
             curl.assert_not_called()
 
     def test_cam_plus_url_is_encoded_and_only_selected_embedding_is_fetched(self):
-        name = "wespeaker_en_voxceleb_CAM++.onnx"
         with mock.patch.object(models.subprocess, "run", side_effect=self.fake_curl) as curl:
-            models.ensure_models(str(self.root), name)
+            models.ensure_models(str(self.root), CAMPP)
         curl.assert_called_once()
         self.assertTrue(curl.call_args.args[0][-1].endswith("/wespeaker_en_voxceleb_CAM%2B%2B.onnx"))
-        self.assertEqual({p.name for p in self.root.glob("*.onnx")}, {name})
+        self.assertEqual(list((self.root / "diarization").rglob("*.onnx")), [self.corrected_path(CAMPP)])
+        self.assertFalse((self.root / CAMPP).exists())
+
+    def test_campp_offline_legacy_symlink_and_explicit_prefetch(self):
+        flat = self.root / CAMPP
+        target = self.root / "legacy.onnx"
+        target.write_bytes(self.legacy_payloads[CAMPP])
+        flat.symlink_to(target.name)
+        current = self.corrected_path(CAMPP)
+        with mock.patch.dict(os.environ, {"WHISPER_LOCAL_ONLY": "true"}), \
+                mock.patch.object(models.subprocess, "run", side_effect=self.fake_curl) as curl:
+            with self.assertLogs(models.logger, level="WARNING") as logs:
+                self.assertEqual(Path(models.ensure_models(str(self.root), CAMPP, local_files_only=True)[1]), flat)
+            self.assertIn("whisper_manage --downloaddiarize " + CAMPP, logs.output[0])
+            self.assertFalse(current.parent.exists())
+            curl.assert_not_called()
+            self.assertEqual(Path(models.ensure_models(str(self.root), CAMPP)[1]), current)
+            self.assertEqual(Path(models.ensure_models(str(self.root), CAMPP, local_files_only=True)[1]), current)
+            curl.assert_called_once()
+        self.assertEqual(current.read_bytes(), self.payloads[CAMPP])
+        self.assertEqual(os.readlink(flat), target.name)
+        self.assertEqual(target.read_bytes(), self.legacy_payloads[CAMPP])
+
+    def test_campp_rejects_invalid_corrected_or_legacy_cache(self):
+        old = self.root / CAMPP
+        old.write_bytes(self.legacy_payloads[CAMPP])
+        current = self.corrected_path(CAMPP)
+        current.parent.mkdir(parents=True)
+        with mock.patch.object(models.subprocess, "run") as curl:
+            for invalid, expected in ((current, self.payloads[CAMPP]), (old, self.legacy_payloads[CAMPP])):
+                payload = b"x" * len(expected)
+                invalid.write_bytes(payload)
+                for offline in (False, True):
+                    with self.subTest(path=invalid, offline=offline):
+                        with self.assertRaisesRegex(RuntimeError, "verification"):
+                            models.ensure_models(str(self.root), CAMPP, local_files_only=offline)
+                        self.assertEqual(invalid.read_bytes(), payload)
+                invalid.unlink()
+            curl.assert_not_called()
+
+    def test_campp_concurrent_downloads_publish_verified_bytes(self):
+        ready = threading.Barrier(2, timeout=5)
+
+        def download(command, **kwargs):
+            self.fake_curl(command, **kwargs)
+            ready.wait()
+
+        with mock.patch.object(models.subprocess, "run", side_effect=download) as curl, \
+                ThreadPoolExecutor(max_workers=2) as executor:
+            calls = [executor.submit(models.ensure_models, str(self.root), CAMPP) for _ in range(2)]
+            for call in calls:
+                self.assertEqual(Path(call.result(timeout=10)[1]), self.corrected_path(CAMPP))
+            self.assertEqual(curl.call_count, 2)
+        self.assertEqual(self.corrected_path(CAMPP).read_bytes(), self.payloads[CAMPP])
+        self.assertFalse(list(self.root.rglob(".diarization-*")))
+
+    def test_campp_reuses_verified_destination_that_appears_during_download(self):
+        candidate = self.corrected_path(CAMPP)
+        shared = self.root / "shared.onnx"
+        shared.write_bytes(self.payloads[CAMPP])
+
+        def download(command, **kwargs):
+            self.fake_curl(command, **kwargs)
+            candidate.symlink_to(shared)
+
+        with mock.patch.object(models.subprocess, "run", side_effect=download):
+            self.assertEqual(Path(models.ensure_models(str(self.root), CAMPP)[1]), candidate)
+        self.assertTrue(candidate.is_symlink())
+        self.assertEqual(candidate.read_bytes(), self.payloads[CAMPP])
 
     def test_recovery_preserves_bad_file_and_reuses_replacement_offline(self):
         path = self.root / DEFAULT
@@ -255,27 +345,19 @@ class ModelCacheTests(unittest.TestCase):
         path.unlink()
         path.parent.rmdir()
         (self.root / DEFAULT).write_bytes(self.payloads[DEFAULT])
-        buffer = io.BytesIO()
-        with tarfile.open(fileobj=buffer, mode="w:bz2") as tar:
-            for name, data in ((models.SEGMENTATION_MODEL, self.seg),
-                               (str(Path(models.SEGMENTATION_MODEL).parent / "LICENSE"), b"license")):
-                member = tarfile.TarInfo(name)
-                member.size = len(data)
-                tar.addfile(member, io.BytesIO(data))
-        archive = buffer.getvalue()
-        def download(command, **kwargs):
-            Path(command[command.index("--output") + 1]).write_bytes(archive)
         with tempfile.TemporaryDirectory() as shared:
             path.parent.symlink_to(shared, target_is_directory=True)
-            with mock.patch.object(models, "_SEGMENTATION_DOWNLOAD", self.asset(archive)), \
-                    mock.patch.object(models.subprocess, "run", side_effect=download) as curl:
+            with mock.patch.object(models.subprocess, "run", side_effect=self.fake_curl) as curl:
                 models.ensure_models(str(self.root))
-                self.assertEqual(curl.call_count, 1)
+                base = ("https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/"
+                        "9403a6902bb58e3d5ae8c7e77c3422de279db2e0/")
+                self.assertEqual([call.args[0][-1] for call in curl.call_args_list],
+                                 [base + "model.onnx", base + "LICENSE"])
                 models.ensure_models(str(self.root), local_files_only=True)
-                self.assertEqual(curl.call_count, 1)
+                self.assertEqual(curl.call_count, 2)
             self.assertTrue(path.parent.is_symlink())
             self.assertEqual((Path(shared) / "model.onnx").read_bytes(), self.seg)
-            self.assertEqual((Path(shared) / "LICENSE").read_bytes(), b"license")
+            self.assertEqual((Path(shared) / "LICENSE").read_bytes(), self.license)
             self.assertEqual({p.name for p in Path(shared).iterdir()}, {"model.onnx", "LICENSE"})
 
     def test_invalid_file_symlinks_are_preserved_without_download(self):
@@ -392,47 +474,61 @@ else:
             self.assertFalse((self.root / DEFAULT).exists())
             self.assertFalse(list(self.root.rglob(".diarization-*")))
 
-    def test_segmentation_extracts_only_exact_regular_model(self):
+    def test_segmentation_publishes_neither_file_when_a_download_is_invalid(self):
         seg_path = self.root / models.SEGMENTATION_MODEL
         seg_path.unlink()
         (self.root / DEFAULT).write_bytes(self.payloads[DEFAULT])
-        for linked_member in (None, "model", "license"):
-            buf = io.BytesIO()
-            with tarfile.open(fileobj=buf, mode="w:bz2") as tar:
-                extra = tarfile.TarInfo("../../unexpected")
-                extra.size = 4
-                tar.addfile(extra, io.BytesIO(b"oops"))
-                model = tarfile.TarInfo(models.SEGMENTATION_MODEL)
-                if linked_member == "model":
-                    model.type = tarfile.SYMTYPE
-                    model.linkname = "../../unexpected"
-                    tar.addfile(model)
-                else:
-                    model.size = len(self.seg)
-                    tar.addfile(model, io.BytesIO(self.seg))
-                license_member = tarfile.TarInfo(str(Path(models.SEGMENTATION_MODEL).parent / "LICENSE"))
-                if linked_member == "license":
-                    license_member.type = tarfile.SYMTYPE
-                    license_member.linkname = "../../unexpected"
-                    tar.addfile(license_member)
-                else:
-                    license_member.size = 7
-                    tar.addfile(license_member, io.BytesIO(b"license"))
-            archive = buf.getvalue()
-            def download(command, **kwargs):
-                Path(command[command.index("--output") + 1]).write_bytes(archive)
-            with mock.patch.object(models, "_SEGMENTATION_DOWNLOAD", self.asset(archive)), \
-                 mock.patch.object(models.subprocess, "run", side_effect=download):
-                if linked_member:
-                    with self.assertRaisesRegex(RuntimeError, "archive " + linked_member):
-                        models.ensure_models(str(self.root))
-                else:
+        for invalid in ("model.onnx", "LICENSE"):
+            for problem in ("missing", "wrong-size", "wrong-hash"):
+                def download(command, **kwargs):
+                    if not command[-1].endswith("/" + invalid):
+                        self.fake_curl(command, **kwargs)
+                    elif problem != "missing":
+                        dest = Path(command[command.index("--output") + 1])
+                        dest.write_bytes(b"bad" if problem == "wrong-size"
+                                         else b"x" * len(self.payloads[invalid]))
+
+                with self.subTest(file=invalid, problem=problem), \
+                        mock.patch.object(models.subprocess, "run", side_effect=download), \
+                        self.assertRaisesRegex(RuntimeError, "verification|expected file"):
                     models.ensure_models(str(self.root))
-                    self.assertEqual(seg_path.read_bytes(), self.seg)
-                    self.assertEqual((seg_path.parent / "LICENSE").read_bytes(), b"license")
-                    seg_path.unlink()
-            self.assertFalse(list(self.root.rglob(".diarization-*")))
-            self.assertEqual(sorted(p.name for p in self.root.iterdir()), [DEFAULT, seg_path.parent.name])
+                self.assertEqual(list(seg_path.parent.iterdir()), [])
+
+    def test_segmentation_keeps_existing_license(self):
+        seg_path = self.root / models.SEGMENTATION_MODEL
+        seg_path.unlink()
+        license_path = seg_path.with_name("LICENSE")
+        license_path.write_bytes(b"existing license notice")
+        (self.root / DEFAULT).write_bytes(self.payloads[DEFAULT])
+        with mock.patch.object(models.subprocess, "run", side_effect=self.fake_curl) as curl:
+            models.ensure_models(str(self.root))
+            curl.assert_called_once()
+            self.assertTrue(curl.call_args.args[0][-1].endswith("/model.onnx"))
+        self.assertEqual(license_path.read_bytes(), b"existing license notice")
+        self.assertEqual(seg_path.read_bytes(), self.seg)
+
+    def test_segmentation_retries_model_publication_with_verified_license(self):
+        seg_path = self.root / models.SEGMENTATION_MODEL
+        seg_path.unlink()
+        license_path = seg_path.with_name("LICENSE")
+        (self.root / DEFAULT).write_bytes(self.payloads[DEFAULT])
+        publish = models.os.replace
+
+        def fail_model(source, destination):
+            if destination == seg_path:
+                raise PermissionError("model publication fixture")
+            return publish(source, destination)
+
+        with mock.patch.object(models.subprocess, "run", side_effect=self.fake_curl) as curl:
+            with mock.patch.object(models.os, "replace", side_effect=fail_model), \
+                    self.assertRaisesRegex(PermissionError, "model publication fixture"):
+                models.ensure_models(str(self.root))
+            self.assertEqual(list(seg_path.parent.iterdir()), [license_path])
+            self.assertEqual(license_path.read_bytes(), self.license)
+            models.ensure_models(str(self.root))
+            self.assertEqual([call.args[0][-1].rsplit("/", 1)[-1] for call in curl.call_args_list],
+                             ["model.onnx", "LICENSE", "model.onnx"])
+        self.assertEqual(seg_path.read_bytes(), self.seg)
 
     def test_publication_failure_cleans_verified_temporary_download(self):
         with mock.patch.object(models.subprocess, "run", side_effect=self.fake_curl), \

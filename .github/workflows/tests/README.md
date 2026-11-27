@@ -36,6 +36,10 @@ The inference helpers accept `--api`, `--audio`, `--cache` and `--output` paths
 and may download models. Dependency setup and CI invocations are defined in the
 image workflows; keep dependencies isolated from the system Python environment.
 
+When updating model pins in `diarization_models.py`, verify file sizes and
+SHA-256 hashes against the selected upstream revision. Test a fresh cache and
+verify offline startup after upgrading an existing CAM++ cache.
+
 ## Public audio fixtures
 
 - Decoding: OpenAI Whisper's [jfk.flac](https://github.com/openai/whisper/blob/6e3be77e1a105e59086e3e21ff5f609fd6fa89a5/tests/jfk.flac), under its [MIT license, Copyright (c) 2022 OpenAI](https://github.com/openai/whisper/blob/6e3be77e1a105e59086e3e21ff5f609fd6fa89a5/LICENSE).

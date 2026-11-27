@@ -18,6 +18,8 @@ OPTION = "WHISPER_DIARIZE_EMBEDDING_MODEL"
 DEFAULT = "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
 ENGLISH = ("wespeaker_en_voxceleb_resnet34_LM.onnx", "nemo_en_titanet_large.onnx")
 BASE_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/"
+PINNED_URL = ("https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/"
+              "0743f301363dec56491a490f6d6cbc9d67f9a3bf/")
 VALID = [("", DEFAULT), ('""', DEFAULT), ("' \t '", DEFAULT), (DEFAULT, DEFAULT),
          (ENGLISH[0], ENGLISH[0]), (ENGLISH[1], ENGLISH[1]),
          (" \t\r\n\v\f' " + ENGLISH[0] + " '\t", ENGLISH[0]),
@@ -25,7 +27,8 @@ VALID = [("", DEFAULT), ('""', DEFAULT), ("' \t '", DEFAULT), (DEFAULT, DEFAULT)
 BAD = [
     "wespeaker_en_voxceleb_resnet34_LM", "WESPEAKER_EN_VOXCELEB_RESNET34_LM.ONNX",
     "unknown.onnx", "../" + ENGLISH[0], "/var/lib/whisper/" + ENGLISH[0],
-    BASE_URL + ENGLISH[0], ENGLISH[0] + "\n" + ENGLISH[1], ENGLISH[0] + " " + ENGLISH[1],
+    BASE_URL + ENGLISH[0], PINNED_URL + ENGLISH[0],
+    ENGLISH[0] + "\n" + ENGLISH[1], ENGLISH[0] + " " + ENGLISH[1],
     "'" + ENGLISH[0], ENGLISH[0] + '"', "'\"" + ENGLISH[0] + "\"'", "*", "*.onnx",
     "checksum.txt", "fangjun-sr-1.wav", "$(id)", ENGLISH[0] + " ", "x" * 10000,
 ]
@@ -68,7 +71,6 @@ class EmbeddingModelListTests(unittest.TestCase):
         for model in ENGLISH + (DEFAULT,):
             self.assertIn(model, models)
         self.assertEqual(diarizer._EMB_MODEL_REL, DEFAULT)
-        self.assertEqual(diarizer._EMB_MODEL_URL, BASE_URL + DEFAULT)
         self.assertEqual(api_server._DEFAULT_DIARIZE_EMBEDDING_MODEL, DEFAULT)
         self.assertIn("model=" + DEFAULT + "\n", (ROOT / "run.sh").read_text())
         for model in models:
