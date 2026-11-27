@@ -4,6 +4,8 @@ Notable changes to ScribeCrate are documented here.
 
 ## 2026-11-26
 
+Release: `2026.11.2`
+
 ### Fixed
 
 - Restore diarization downloads by pinning the embedding and segmentation sources to exact revisions.
